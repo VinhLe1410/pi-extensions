@@ -119,7 +119,7 @@ export default function (pi: ExtensionAPI) {
           overlay: true,
           overlayOptions: {
             anchor: "center",
-            width: "85%",
+            width: "40%",
             minWidth: 80,
             maxHeight: "80%",
             margin: 2,
