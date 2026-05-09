@@ -7,6 +7,8 @@ import {
 } from "@earendil-works/pi-tui";
 import { TAB_LABELS, TAB_ORDER } from "./constants";
 import {
+  centerBlock,
+  centerLine,
   clampLines,
   fitCell,
   formatInsightPercent,
@@ -100,13 +102,18 @@ export class UsageComponent {
     }
   }
 
+  getTitle(): string {
+    return this.viewMode === "insights" ? "Usage Insights" : "Usage Statistics";
+  }
+
   render(width: number): string[] {
     if (this.viewMode === "insights") {
+      const bodyWidth = Math.min(Math.max(width, 1), 88);
       return clampLines(
         [
-          ...this.renderTitle(),
+          "",
           ...this.renderTabs(width, getTableLayout(width)),
-          ...this.renderInsights(width),
+          ...centerBlock(this.renderInsights(bodyWidth), width, bodyWidth),
           ...this.renderHelp(width),
         ],
         width,
@@ -116,23 +123,16 @@ export class UsageComponent {
     const layout = getTableLayout(width);
     return clampLines(
       [
-        ...this.renderTitle(),
+        "",
         ...this.renderTabs(width, layout),
-        ...this.renderHeader(layout),
-        ...this.renderRows(layout),
-        ...this.renderTotals(layout),
+        ...this.renderHeader(layout, width),
+        ...this.renderRows(layout, width),
+        ...this.renderTotals(layout, width),
         ...this.renderFormulaNote(width),
         ...this.renderHelp(width),
       ],
       width,
     );
-  }
-
-  private renderTitle(): string[] {
-    const th = this.theme;
-    const label =
-      this.viewMode === "insights" ? "Usage Insights" : "Usage Statistics";
-    return [th.fg("accent", th.bold(label)), ""];
   }
 
   private renderInsights(width: number): string[] {
@@ -211,10 +211,14 @@ export class UsageComponent {
           )
         : [];
 
-    return [tabLine, ...infoLines, ""];
+    return [
+      centerLine(tabLine, width),
+      ...infoLines.map((line) => centerLine(line, width)),
+      "",
+    ];
   }
 
-  private renderHeader(layout: TableLayout): string[] {
+  private renderHeader(layout: TableLayout, width: number): string[] {
     const th = this.theme;
 
     let headerLine = fitCell("Provider / Model", layout.nameWidth);
@@ -224,8 +228,8 @@ export class UsageComponent {
     }
 
     return [
-      th.fg("muted", headerLine),
-      th.fg("border", "─".repeat(layout.tableWidth)),
+      centerLine(th.fg("muted", headerLine), width),
+      centerLine(th.fg("border", "─".repeat(layout.tableWidth)), width),
     ];
   }
 
@@ -271,13 +275,13 @@ export class UsageComponent {
     return row;
   }
 
-  private renderRows(layout: TableLayout): string[] {
+  private renderRows(layout: TableLayout, width: number): string[] {
     const th = this.theme;
     const stats = this.data[this.activeTab];
     const lines: string[] = [];
 
     if (this.providerOrder.length === 0) {
-      lines.push(th.fg("dim", "  No usage data for this period"));
+      lines.push(centerLine(th.fg("dim", "No usage data for this period"), width));
       return lines;
     }
 
@@ -292,10 +296,13 @@ export class UsageComponent {
         : th.fg("dim", `${arrow} `);
 
       lines.push(
-        this.renderDataRow(providerName, providerStats, layout, {
-          selected: isSelected,
-          prefix,
-        }),
+        centerLine(
+          this.renderDataRow(providerName, providerStats, layout, {
+            selected: isSelected,
+            prefix,
+          }),
+          width,
+        ),
       );
 
       if (isExpanded) {
@@ -305,10 +312,13 @@ export class UsageComponent {
 
         for (const [modelName, modelStats] of models) {
           lines.push(
-            this.renderDataRow(modelName, modelStats, layout, {
-              indent: 4,
-              dimAll: true,
-            }),
+            centerLine(
+              this.renderDataRow(modelName, modelStats, layout, {
+                indent: 4,
+                dimAll: true,
+              }),
+              width,
+            ),
           );
         }
       }
@@ -317,7 +327,7 @@ export class UsageComponent {
     return lines;
   }
 
-  private renderTotals(layout: TableLayout): string[] {
+  private renderTotals(layout: TableLayout, width: number): string[] {
     const th = this.theme;
     const stats = this.data[this.activeTab];
 
@@ -327,7 +337,11 @@ export class UsageComponent {
       totalRow += col.dimmed ? th.fg("dim", value) : value;
     }
 
-    return [th.fg("border", "─".repeat(layout.tableWidth)), totalRow, ""];
+    return [
+      centerLine(th.fg("border", "─".repeat(layout.tableWidth)), width),
+      centerLine(totalRow, width),
+      "",
+    ];
   }
 
   private renderFormulaNote(width: number): string[] {
@@ -337,7 +351,7 @@ export class UsageComponent {
       "Tokens & ↑In include CacheWrite (v0.2.0+)",
       "Incl. CacheWrite (v0.2.0+)",
     ]);
-    return [this.theme.fg("dim", line), ""];
+    return [centerLine(this.theme.fg("dim", line), width), ""];
   }
 
   private renderHelp(width: number): string[] {
@@ -358,7 +372,7 @@ export class UsageComponent {
             "[q] close",
           ];
     const line = pickFittingText(width, variants);
-    return [this.theme.fg("dim", line)];
+    return [centerLine(this.theme.fg("dim", line), width)];
   }
 
   invalidate(): void {}

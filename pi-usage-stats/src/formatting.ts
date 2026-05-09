@@ -49,6 +49,33 @@ export function clampLines(lines: string[], width: number): string[] {
   return lines.map((line) => truncateToWidth(line, Math.max(width, 0)));
 }
 
+export function centerLine(s: string, width: number): string {
+  const safeWidth = Math.max(width, 0);
+  const truncated = truncateToWidth(s, safeWidth);
+  const padding = Math.floor(
+    Math.max(0, safeWidth - visibleWidth(truncated)) / 2,
+  );
+  return " ".repeat(padding) + truncated;
+}
+
+export function centerBlock(
+  lines: string[],
+  width: number,
+  preferredWidth?: number,
+): string[] {
+  const safeWidth = Math.max(width, 0);
+  const measuredWidth = lines.reduce(
+    (max, line) => Math.max(max, visibleWidth(line)),
+    0,
+  );
+  const blockWidth = Math.min(safeWidth, preferredWidth ?? measuredWidth);
+  const padding = Math.floor(Math.max(0, safeWidth - blockWidth) / 2);
+
+  return lines.map(
+    (line) => " ".repeat(padding) + truncateToWidth(line, blockWidth),
+  );
+}
+
 export function pickFittingText(width: number, variants: string[]): string {
   for (const variant of variants) {
     if (visibleWidth(variant) <= width) return variant;

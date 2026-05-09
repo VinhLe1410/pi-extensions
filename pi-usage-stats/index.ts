@@ -1,18 +1,56 @@
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
+  Theme,
 } from "@earendil-works/pi-coding-agent";
-import { DynamicBorder } from "@earendil-works/pi-coding-agent";
-import { CancellableLoader, Container, Spacer } from "@earendil-works/pi-tui";
+import {
+  CancellableLoader,
+  truncateToWidth,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import { UsageComponent } from "./src/UsageComponent";
-import { clampLines } from "./src/formatting";
+import { clampLines, padRight } from "./src/formatting";
 import { collectUsageData } from "./src/usage-data";
 import type { UsageData } from "./src/types";
+
+function renderTopBorder(theme: Theme, width: number, title: string): string {
+  const innerWidth = Math.max(0, width - 2);
+  const titleText = truncateToWidth(` ${title} `, innerWidth);
+  const titleWidth = visibleWidth(titleText);
+  const left = Math.floor(Math.max(0, innerWidth - titleWidth) / 2);
+  const right = Math.max(0, innerWidth - titleWidth - left);
+
+  return (
+    theme.fg("border", `╭${"─".repeat(left)}`) +
+    theme.fg("accent", titleText) +
+    theme.fg("border", `${"─".repeat(right)}╮`)
+  );
+}
+
+function renderBox(
+  theme: Theme,
+  width: number,
+  title: string,
+  contentLines: string[],
+): string[] {
+  if (width < 2) return clampLines(contentLines, width);
+
+  const innerWidth = width - 2;
+  const lines = [renderTopBorder(theme, width, title)];
+
+  for (const line of contentLines) {
+    const content = padRight(truncateToWidth(line, innerWidth), innerWidth);
+    lines.push(theme.fg("border", "│") + content + theme.fg("border", "│"));
+  }
+
+  lines.push(theme.fg("border", `╰${"─".repeat(innerWidth)}╯`));
+  return clampLines(lines, width);
+}
 
 /**
  * /usage - Usage statistics dashboard
  *
- * Shows an inline view with usage stats grouped by provider.
+ * Shows a centered overlay with usage stats grouped by provider.
  * - Tab cycles: Today → This Week → Last Week → All Time
  * - Arrow keys navigate providers
  * - Enter expands/collapses to show models
@@ -55,37 +93,39 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      await ctx.ui.custom<void>((tui, theme, _kb, done) => {
-        const container = new Container();
+      await ctx.ui.custom<void>(
+        (tui, theme, _kb, done) => {
+          const usage = new UsageComponent(
+            theme,
+            data,
+            () => tui.requestRender(),
+            () => done(),
+          );
 
-        // Top border
-        container.addChild(
-          new DynamicBorder((s: string) => theme.fg("border", s)),
-        );
-        container.addChild(new Spacer(1));
-
-        const usage = new UsageComponent(
-          theme,
-          data,
-          () => tui.requestRender(),
-          () => done(),
-        );
-
-        return {
-          render: (w: number) => {
-            const borderLines = clampLines(container.render(w), w);
-            const usageLines = usage.render(w);
-            const bottomBorder = theme.fg("border", "─".repeat(w));
-            return clampLines(
-              [...borderLines, ...usageLines, "", bottomBorder],
-              w,
-            );
+          return {
+            render: (w: number) =>
+              renderBox(
+                theme,
+                w,
+                usage.getTitle(),
+                usage.render(Math.max(0, w - 2)),
+              ),
+            invalidate: () => usage.invalidate(),
+            handleInput: (input: string) => usage.handleInput(input),
+            dispose: () => {},
+          };
+        },
+        {
+          overlay: true,
+          overlayOptions: {
+            anchor: "center",
+            width: "85%",
+            minWidth: 80,
+            maxHeight: "80%",
+            margin: 2,
           },
-          invalidate: () => container.invalidate(),
-          handleInput: (input: string) => usage.handleInput(input),
-          dispose: () => {},
-        };
-      });
+        },
+      );
     },
   });
 }
