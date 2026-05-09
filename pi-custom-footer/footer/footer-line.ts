@@ -6,6 +6,14 @@ import type { FooterModel } from "./footer-model";
 const SEPARATOR = " · ";
 const RESET_ICON = "";
 
+interface TpsTrackerState {
+  phase: "generating" | "done";
+  tps: number | null;
+  tokens: number;
+  elapsedSeconds: number;
+  estimated: boolean;
+}
+
 function separator(theme: Theme): string {
   return theme.fg("dim", SEPARATOR);
 }
@@ -88,7 +96,23 @@ function renderContextWindow(footerModel: FooterModel, theme: Theme): string {
   return theme.fg("dim", "[context: ") + theme.fg(contextColor(percentage), value) + theme.fg("dim", "]");
 }
 
+function renderTpsStatus(state: TpsTrackerState | null, theme: Theme): string {
+  if (!state) return "";
+
+  const tpsLabel = state.tps === null
+    ? state.phase === "generating" ? "calculating" : "N/A"
+    : `${state.tps} tok/s`;
+
+  return (
+    theme.fg("dim", "[tps: ") +
+    theme.fg("accent", tpsLabel) +
+    theme.fg("dim", "]")
+  );
+}
+
 function pinRight(left: string, right: string, width: number, theme: Theme): string {
+  if (right.length === 0) return truncateToWidth(left, width, theme.fg("dim", "…"));
+
   const rightWidth = visibleWidth(right);
   if (rightWidth >= width) {
     return truncateToWidth(right, width, theme.fg("dim", "…"));
@@ -126,6 +150,7 @@ export function renderFooterLines(
   width: number,
   theme: Theme,
   usage: UsageSnapshot | null,
+  tpsState: TpsTrackerState | null,
 ): string[] {
   return [
     pinRight(
@@ -134,6 +159,11 @@ export function renderFooterLines(
       width,
       theme,
     ),
-    truncateToWidth(renderLocationLine(footerModel, theme), width),
+    pinRight(
+      renderLocationLine(footerModel, theme),
+      renderTpsStatus(tpsState, theme),
+      width,
+      theme,
+    ),
   ].filter((line) => line.length > 0);
 }

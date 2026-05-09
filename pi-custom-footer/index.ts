@@ -31,9 +31,18 @@ import { renderFooterLines } from "./footer/footer-line";
 // ============ Provider Detection ============
 
 const CODEX_FAST_STATE_EVENT = "codex-fast:state";
+const TPS_STATE_EVENT = "tps-tracker:state";
 
 interface CodexFastState {
   enabled: boolean;
+}
+
+interface TpsTrackerState {
+  phase: "generating" | "done";
+  tps: number | null;
+  tokens: number;
+  elapsedSeconds: number;
+  estimated: boolean;
 }
 
 function isCodexFastState(value: unknown): value is CodexFastState {
@@ -42,6 +51,18 @@ function isCodexFastState(value: unknown): value is CodexFastState {
     value !== null &&
     "enabled" in value &&
     typeof (value as { enabled: unknown }).enabled === "boolean"
+  );
+}
+
+function isTpsTrackerState(value: unknown): value is TpsTrackerState {
+  if (typeof value !== "object" || value === null) return false;
+  const state = value as Record<string, unknown>;
+  return (
+    (state.phase === "generating" || state.phase === "done") &&
+    (typeof state.tps === "number" || state.tps === null) &&
+    typeof state.tokens === "number" &&
+    typeof state.elapsedSeconds === "number" &&
+    typeof state.estimated === "boolean"
   );
 }
 
@@ -62,11 +83,18 @@ export default function (pi: ExtensionAPI) {
     intervalMs: USAGE_REFRESH_INTERVAL,
   });
   let codexFastMode = false;
+  let tpsState: TpsTrackerState | null = null;
   let activeTui: TUI | undefined;
 
   pi.events.on(CODEX_FAST_STATE_EVENT, (state) => {
     if (!isCodexFastState(state)) return;
     codexFastMode = state.enabled;
+    activeTui?.requestRender();
+  });
+
+  pi.events.on(TPS_STATE_EVENT, (state) => {
+    if (!isTpsTrackerState(state)) return;
+    tpsState = state;
     activeTui?.requestRender();
   });
 
@@ -127,12 +155,14 @@ export default function (pi: ExtensionAPI) {
               width,
               theme,
               usage.current(),
+              tpsState,
             );
 
             // Extension statuses (full width, second line)
             const extensionStatuses = footerData.getExtensionStatuses();
             if (extensionStatuses.size > 0) {
               const statusLine = Array.from(extensionStatuses.entries())
+                .filter(([key]) => key !== "tps")
                 .sort(([a], [b]) => a.localeCompare(b))
                 .map(([, text]) =>
                   text
@@ -141,9 +171,11 @@ export default function (pi: ExtensionAPI) {
                     .trim(),
                 )
                 .join(" ");
-              lines.push(
-                truncateToWidth(statusLine, width, theme.fg("dim", "...")),
-              );
+              if (statusLine.length > 0) {
+                lines.push(
+                  truncateToWidth(statusLine, width, theme.fg("dim", "...")),
+                );
+              }
             }
 
             return lines;

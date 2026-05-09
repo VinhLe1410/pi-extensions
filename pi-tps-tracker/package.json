@@ -1,0 +1,5 @@
+{
+  "name": "pi-tps-tracker",
+  "private": true,
+  "description": "Pi extension for tracking output tokens per second during agent runs"
+}
