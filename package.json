@@ -1,0 +1,19 @@
+{
+  "name": "pi-extensions",
+  "private": true,
+  "packageManager": "bun@latest",
+  "workspaces": [
+    "pi-custom-footer",
+    "pi-usage-stats",
+    "zsh-user-bash"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^0.74.0",
+    "@earendil-works/pi-coding-agent": "^0.74.0",
+    "@earendil-works/pi-tui": "^0.74.0",
+    "typescript": "^5.0.0"
+  }
+}
