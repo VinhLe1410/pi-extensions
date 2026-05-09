@@ -30,6 +30,21 @@ import { renderFooterLines } from "./footer/footer-line";
 
 // ============ Provider Detection ============
 
+const CODEX_FAST_STATE_EVENT = "codex-fast:state";
+
+interface CodexFastState {
+  enabled: boolean;
+}
+
+function isCodexFastState(value: unknown): value is CodexFastState {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "enabled" in value &&
+    typeof (value as { enabled: unknown }).enabled === "boolean"
+  );
+}
+
 function detectProvider(modelProvider: string): string | null {
   return PROVIDER_MAP[modelProvider] || null;
 }
@@ -45,6 +60,14 @@ export default function (pi: ExtensionAPI) {
   const usage = createUsageState({
     registry: fetcherRegistry,
     intervalMs: USAGE_REFRESH_INTERVAL,
+  });
+  let codexFastMode = false;
+  let activeTui: TUI | undefined;
+
+  pi.events.on(CODEX_FAST_STATE_EVENT, (state) => {
+    if (!isCodexFastState(state)) return;
+    codexFastMode = state.enabled;
+    activeTui?.requestRender();
   });
 
   function refreshGitFooter(): void {
@@ -79,8 +102,11 @@ export default function (pi: ExtensionAPI) {
 
         startUsageForModelProvider(ctx.model?.provider);
 
+        activeTui = tui;
+
         return {
           dispose: () => {
+            if (activeTui === tui) activeTui = undefined;
             unsubBranch();
             unsubUsage();
             usage.stop();
@@ -91,6 +117,7 @@ export default function (pi: ExtensionAPI) {
             const footerModel = buildFooterModel(ctx, gitCache, {
               showCwd,
               showBranch,
+              fastMode: codexFastMode,
               cwd: process.cwd(),
               homeDir: process.env.HOME || process.env.USERPROFILE,
             });

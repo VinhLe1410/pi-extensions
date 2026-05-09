@@ -19,6 +19,7 @@ interface BranchInfo {
 interface FooterModelConfig {
   showCwd: boolean;
   showBranch: boolean;
+  fastMode: boolean;
   cwd: string;
   homeDir?: string;
 }
@@ -31,6 +32,7 @@ export interface FooterModel {
   model: {
     name: string;
     thinkingLevel: string;
+    fastMode: boolean;
   };
   context: {
     percentage: number;
@@ -117,6 +119,7 @@ export function buildFooterModel(
     model: {
       name: modelName,
       thinkingLevel,
+      fastMode: config.fastMode,
     },
     context: {
       percentage: contextInfo.percentage,

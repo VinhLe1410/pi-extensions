@@ -44,6 +44,10 @@ function renderThinking(theme: Theme, thinkingLevel: string): string {
   return theme.fg(thinkingColor(thinkingLevel), label);
 }
 
+function renderFastMode(theme: Theme): string {
+  return theme.fg("accent", "fast");
+}
+
 function renderUsageWindow(theme: Theme, window: RateWindow): string {
   const rounded = Math.round(window.usedPercent);
   const pct = theme.fg(percentColor(rounded), `${rounded}%`);
@@ -71,6 +75,7 @@ function renderTopLine(
   const parts = [
     theme.fg("muted", footerModel.model.name),
     renderThinking(theme, footerModel.model.thinkingLevel),
+    ...(footerModel.model.fastMode ? [renderFastMode(theme)] : []),
     ...usageWindows(usage).map((window) => renderUsageWindow(theme, window)),
   ];
 
