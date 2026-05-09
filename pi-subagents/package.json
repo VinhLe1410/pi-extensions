@@ -1,0 +1,16 @@
+{
+  "name": "pi-subagents",
+  "private": true,
+  "type": "module",
+  "description": "Local Pi subagent runtime",
+  "scripts": {
+    "test": "node --test test/test.ts test/system-prompt-mode.test.ts test/subagents/sync.test.ts test/subagents/widget.test.ts test/live-test-guard.test.ts",
+    "test:e2e-live": "node scripts/test-e2e-live.mjs",
+    "test:e2e-live-blocking": "node scripts/test-e2e-live-blocking.mjs",
+    "test:e2e-live-mix-blocking": "node scripts/test-e2e-live-mix-blocking.mjs",
+    "test:e2e-live-deny-tools": "node scripts/test-e2e-live-deny-tools.mjs",
+    "test:e2e-live-tools": "node scripts/test-e2e-live-tools.mjs",
+    "test:e2e-live-extensions": "node scripts/test-e2e-live-extensions.mjs",
+    "test:e2e-live-stop-after-turn": "node scripts/test-e2e-live-stop-after-turn.mjs"
+  }
+}
