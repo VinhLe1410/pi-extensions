@@ -51,7 +51,7 @@ function renderBox(
  * /usage - Usage statistics dashboard
  *
  * Shows a centered overlay with usage stats grouped by provider.
- * - Tab cycles: Today → This Week → Last Week → All Time
+ * - Tab cycles: Today → This Week → This Month → All Time
  * - Arrow keys navigate providers
  * - Enter expands/collapses to show models
  */

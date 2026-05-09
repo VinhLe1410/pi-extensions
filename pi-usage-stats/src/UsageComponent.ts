@@ -12,11 +12,39 @@ import {
   clampLines,
   fitCell,
   formatInsightPercent,
+  formatTokens,
+  padLeft,
   padRight,
   pickFittingText,
 } from "./formatting";
 import { getTableLayout } from "./table-layout";
 import type { BaseStats, TabName, TableLayout, UsageData, ViewMode } from "./types";
+
+const GRAPH_HEIGHT = 8;
+const GRAPH_CELL_WIDTH = 2;
+const GRAPH_LABEL_HANG_WIDTH = 4;
+
+function alignGraphLine(line: string, width: number): string {
+  const lineWidth = visibleWidth(line);
+  const virtualWidth = lineWidth + GRAPH_LABEL_HANG_WIDTH;
+  const desiredPadding = Math.floor(Math.max(0, width - virtualWidth) / 2);
+  const maxPaddingWithoutClipping = Math.max(0, width - lineWidth);
+  const padding = Math.min(desiredPadding, maxPaddingWithoutClipping);
+
+  return " ".repeat(padding) + truncateToWidth(line, Math.max(0, width - padding));
+}
+
+function niceScaleStep(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 1;
+
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const normalized = value / magnitude;
+
+  if (normalized <= 1) return magnitude;
+  if (normalized <= 2) return 2 * magnitude;
+  if (normalized <= 5) return 5 * magnitude;
+  return 10 * magnitude;
+}
 
 export class UsageComponent {
   private activeTab: TabName = "allTime";
@@ -125,6 +153,7 @@ export class UsageComponent {
       [
         "",
         ...this.renderTabs(width, layout),
+        ...this.renderTokenGraph(width),
         ...this.renderHeader(layout, width),
         ...this.renderRows(layout, width),
         ...this.renderTotals(layout, width),
@@ -133,6 +162,93 @@ export class UsageComponent {
       ],
       width,
     );
+  }
+
+  private renderTokenGraph(width: number): string[] {
+    if (this.activeTab === "allTime") return [];
+
+    const th = this.theme;
+    const buckets = this.data[this.activeTab].tokenBuckets;
+    const title = centerLine(th.fg("accent", th.bold("Tokens")), width);
+
+    if (buckets.length === 0 || buckets.every((value) => value === 0)) {
+      return [
+        title,
+        centerLine(th.fg("dim", "No usage data available yet."), width),
+        "",
+      ];
+    }
+
+    const maxValue = Math.max(...buckets);
+    const step = niceScaleStep(maxValue / GRAPH_HEIGHT);
+    const scaleMax = step * GRAPH_HEIGHT;
+    const scaleLabels = Array.from({ length: GRAPH_HEIGHT }, (_, index) =>
+      formatTokens(step * (GRAPH_HEIGHT - index)),
+    );
+    const labelWidth = Math.max(1, ...scaleLabels.map((label) => visibleWidth(label)));
+    const graphLines: string[] = [];
+
+    for (let row = GRAPH_HEIGHT; row >= 1; row--) {
+      const label = formatTokens(step * row);
+      const bars = buckets
+        .map((value) =>
+          Math.ceil((value / scaleMax) * GRAPH_HEIGHT) >= row
+            ? th.fg("accent", "█") + " ".repeat(GRAPH_CELL_WIDTH - 1)
+            : " ".repeat(GRAPH_CELL_WIDTH),
+        )
+        .join("");
+
+      graphLines.push(
+        padLeft(label, labelWidth) + th.fg("border", " ┤") + bars,
+      );
+    }
+
+    graphLines.push(
+      padLeft("0", labelWidth) +
+        th.fg("border", " └" + "─".repeat(buckets.length * GRAPH_CELL_WIDTH)),
+    );
+    graphLines.push(
+      " ".repeat(labelWidth + 2) + this.renderGraphAxisLabels(buckets.length),
+    );
+
+    return [
+      title,
+      ...graphLines.map((line) => alignGraphLine(line, width)),
+      "",
+    ];
+  }
+
+  private renderGraphAxisLabels(bucketCount: number): string {
+    const axisWidth = bucketCount * GRAPH_CELL_WIDTH;
+    const chars = Array(axisWidth).fill(" ");
+    const labels: Array<{ index: number; text: string }> = [];
+
+    if (this.activeTab === "today") {
+      for (let hour = 0; hour < bucketCount; hour += 4) {
+        labels.push({ index: hour, text: String(hour).padStart(2, "0") });
+      }
+    } else if (this.activeTab === "thisWeek") {
+      ["M", "T", "W", "T", "F", "S", "S"].forEach((text, dayIndex) => {
+        const index = dayIndex * 3 + 1;
+        if (index < bucketCount) labels.push({ index, text });
+      });
+    } else if (this.activeTab === "thisMonth") {
+      for (let day = 1; day <= bucketCount; day += 6) {
+        labels.push({ index: day - 1, text: String(day) });
+      }
+    }
+
+    for (const label of labels) {
+      const start = Math.min(
+        label.index * GRAPH_CELL_WIDTH,
+        Math.max(0, axisWidth - label.text.length),
+      );
+      for (let i = 0; i < label.text.length; i++) {
+        chars[start + i] = label.text[i]!;
+      }
+    }
+
+    return chars.join("");
   }
 
   private renderInsights(width: number): string[] {

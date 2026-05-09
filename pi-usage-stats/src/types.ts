@@ -58,16 +58,17 @@ export interface TimeFilteredStats {
   providers: Map<string, ProviderStats>;
   totals: TotalStats;
   insights: PeriodInsights;
+  tokenBuckets: number[];
 }
 
 export interface UsageData {
   today: TimeFilteredStats;
   thisWeek: TimeFilteredStats;
-  lastWeek: TimeFilteredStats;
+  thisMonth: TimeFilteredStats;
   allTime: TimeFilteredStats;
 }
 
-export type TabName = "today" | "thisWeek" | "lastWeek" | "allTime";
+export type TabName = "today" | "thisWeek" | "thisMonth" | "allTime";
 export type ViewMode = "table" | "insights";
 
 export interface DataColumn {

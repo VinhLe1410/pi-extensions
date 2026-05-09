@@ -154,11 +154,12 @@ function emptyProviderStats(): ProviderStats {
   };
 }
 
-function emptyTimeFilteredStats(): TimeFilteredStats {
+function emptyTimeFilteredStats(tokenBucketCount = 0): TimeFilteredStats {
   return {
     providers: new Map(),
     totals: { sessions: 0, messages: 0, cost: 0, tokens: emptyTokens() },
     insights: { insights: [] },
+    tokenBuckets: Array(tokenBucketCount).fill(0),
   };
 }
 
@@ -166,11 +167,11 @@ function emptyPeriodRawData(): PeriodRawData {
   return { messages: [], sessionCosts: new Map() };
 }
 
-function emptyUsageData(): UsageData {
+function emptyUsageData(monthDayCount: number): UsageData {
   return {
-    today: emptyTimeFilteredStats(),
-    thisWeek: emptyTimeFilteredStats(),
-    lastWeek: emptyTimeFilteredStats(),
+    today: emptyTimeFilteredStats(24),
+    thisWeek: emptyTimeFilteredStats(21),
+    thisMonth: emptyTimeFilteredStats(monthDayCount),
     allTime: emptyTimeFilteredStats(),
   };
 }
@@ -178,17 +179,46 @@ function emptyUsageData(): UsageData {
 function getPeriodsForTimestamp(
   timestamp: number,
   todayMs: number,
+  tomorrowMs: number,
   weekStartMs: number,
-  lastWeekStartMs: number,
+  nextWeekMs: number,
+  monthStartMs: number,
+  nextMonthMs: number,
 ): TabName[] {
   const periods: TabName[] = ["allTime"];
-  if (timestamp >= todayMs) periods.push("today");
-  if (timestamp >= weekStartMs) {
+  if (timestamp >= todayMs && timestamp < tomorrowMs) periods.push("today");
+  if (timestamp >= weekStartMs && timestamp < nextWeekMs) {
     periods.push("thisWeek");
-  } else if (timestamp >= lastWeekStartMs) {
-    periods.push("lastWeek");
+  }
+  if (timestamp >= monthStartMs && timestamp < nextMonthMs) {
+    periods.push("thisMonth");
   }
   return periods;
+}
+
+function addToTokenBuckets(
+  stats: TimeFilteredStats,
+  period: TabName,
+  timestamp: number,
+  tokens: number,
+  weekStartMs: number,
+): void {
+  if (stats.tokenBuckets.length === 0 || timestamp <= 0) return;
+
+  let bucketIndex = -1;
+  if (period === "today") {
+    bucketIndex = new Date(timestamp).getHours();
+  } else if (period === "thisWeek") {
+    const dayIndex = Math.floor((timestamp - weekStartMs) / 86_400_000);
+    const hour = new Date(timestamp).getHours();
+    bucketIndex = dayIndex * 3 + Math.floor(hour / 8);
+  } else if (period === "thisMonth") {
+    bucketIndex = new Date(timestamp).getDate() - 1;
+  }
+
+  if (bucketIndex >= 0 && bucketIndex < stats.tokenBuckets.length) {
+    stats.tokenBuckets[bucketIndex] += tokens;
+  }
 }
 
 function addMessagesToUsageData(
@@ -196,8 +226,11 @@ function addMessagesToUsageData(
   sessionId: string,
   messages: SessionMessage[],
   todayMs: number,
+  tomorrowMs: number,
   weekStartMs: number,
-  lastWeekStartMs: number,
+  nextWeekMs: number,
+  monthStartMs: number,
+  nextMonthMs: number,
   rawByPeriod: Record<TabName, PeriodRawData>,
   globalSessionSpans: Map<string, GlobalSessionSpan>,
   periodSessionIds: Record<TabName, Set<string>>,
@@ -221,8 +254,11 @@ function addMessagesToUsageData(
     const periods = getPeriodsForTimestamp(
       msg.timestamp,
       todayMs,
+      tomorrowMs,
       weekStartMs,
-      lastWeekStartMs,
+      nextWeekMs,
+      monthStartMs,
+      nextMonthMs,
     );
     const tokens = {
       // Count fresh tokens processed this turn.
@@ -259,6 +295,8 @@ function addMessagesToUsageData(
 
       accumulateStats(stats.totals, msg.cost, tokens);
 
+      addToTokenBuckets(stats, period, msg.timestamp, tokens.total, weekStartMs);
+
       const raw = rawByPeriod[period];
       raw.messages.push({
         sessionId,
@@ -282,6 +320,9 @@ export async function collectUsageData(
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const todayMs = startOfToday.getTime();
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  const tomorrowMs = startOfTomorrow.getTime();
 
   // Start of current week (Monday 00:00)
   const startOfWeek = new Date();
@@ -291,22 +332,35 @@ export async function collectUsageData(
   startOfWeek.setHours(0, 0, 0, 0);
   const weekStartMs = startOfWeek.getTime();
 
-  // Start of last week (previous Monday 00:00)
-  const startOfLastWeek = new Date(startOfWeek);
-  startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
-  const lastWeekStartMs = startOfLastWeek.getTime();
+  const startOfNextWeek = new Date(startOfWeek);
+  startOfNextWeek.setDate(startOfNextWeek.getDate() + 7);
+  const nextWeekMs = startOfNextWeek.getTime();
 
-  const data = emptyUsageData();
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  const monthStartMs = startOfMonth.getTime();
+
+  const startOfNextMonth = new Date(startOfMonth);
+  startOfNextMonth.setMonth(startOfNextMonth.getMonth() + 1);
+  const nextMonthMs = startOfNextMonth.getTime();
+  const monthDayCount = new Date(
+    startOfMonth.getFullYear(),
+    startOfMonth.getMonth() + 1,
+    0,
+  ).getDate();
+
+  const data = emptyUsageData(monthDayCount);
   const rawByPeriod: Record<TabName, PeriodRawData> = {
     today: emptyPeriodRawData(),
     thisWeek: emptyPeriodRawData(),
-    lastWeek: emptyPeriodRawData(),
+    thisMonth: emptyPeriodRawData(),
     allTime: emptyPeriodRawData(),
   };
   const periodSessionIds: Record<TabName, Set<string>> = {
     today: new Set(),
     thisWeek: new Set(),
-    lastWeek: new Set(),
+    thisMonth: new Set(),
     allTime: new Set(),
   };
   const globalSessionSpans = new Map<string, GlobalSessionSpan>();
@@ -326,8 +380,11 @@ export async function collectUsageData(
       parsed.sessionId,
       parsed.messages,
       todayMs,
+      tomorrowMs,
       weekStartMs,
-      lastWeekStartMs,
+      nextWeekMs,
+      monthStartMs,
+      nextMonthMs,
       rawByPeriod,
       globalSessionSpans,
       periodSessionIds,
