@@ -283,13 +283,6 @@ These are normally set by the extension itself, but they matter if you are readi
 - `PI_SUBAGENT_SESSION_TITLE`
 - `PI_SUBAGENT_AUTO_EXIT`
 
-### Live test knobs
-
-- `PI_SUBAGENT_ALLOW_LIVE_WINDOWS`
-- `PI_SUBAGENT_LIVE_MODEL`
-- `PI_SUBAGENT_KEEP_E2E_TMP`
-- `PI_SUBAGENT_LIVE_LOCK_PATH`
-
 ## UI
 
 The package adds two useful pieces of UI.
@@ -300,19 +293,3 @@ Each child session also gets its own tools widget so you can see what is availab
 
 That sounds minor until you start juggling several agents. Then it stops sounding minor.
 
-## Testing
-
-There are ordinary tests and live end-to-end smoke tests.
-
-```bash
-bun run test
-PI_SUBAGENT_ALLOW_LIVE_WINDOWS=1 bun run test:e2e-live
-PI_SUBAGENT_ALLOW_LIVE_WINDOWS=1 bun run test:e2e-live-blocking
-PI_SUBAGENT_ALLOW_LIVE_WINDOWS=1 bun run test:e2e-live-mix-blocking
-bun run test:e2e-live-deny-tools
-bun run test:e2e-live-tools
-bun run test:e2e-live-extensions
-bun run test:e2e-live-stop-after-turn
-```
-
-The live tests are intentionally gated so they do not spray terminal windows all over your machine by accident.

@@ -1,10 +1,30 @@
-import { execSync, execFile, execFileSync } from "node:child_process";
+import {
+  execSync as nodeExecSync,
+  execFile as nodeExecFile,
+  execFileSync as nodeExecFileSync,
+} from "node:child_process";
 import { promisify } from "node:util";
 import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
-const execFileAsync = promisify(execFile);
+const nodeExecFileAsync = promisify(nodeExecFile);
+
+function withCurrentEnv(options?: Record<string, unknown>): Record<string, unknown> {
+  return { env: process.env, ...(options ?? {}) };
+}
+
+function execSync(command: string, options?: Record<string, unknown>): any {
+  return nodeExecSync(command, withCurrentEnv(options) as any);
+}
+
+function execFileSync(file: string, args: string[], options?: Record<string, unknown>): any {
+  return nodeExecFileSync(file, args, withCurrentEnv(options) as any);
+}
+
+function execFileAsync(file: string, args: string[], options?: Record<string, unknown>): Promise<{ stdout: string; stderr: string }> {
+  return nodeExecFileAsync(file, args, withCurrentEnv(options) as any) as unknown as Promise<{ stdout: string; stderr: string }>;
+}
 
 export type MuxBackend = "cmux" | "tmux" | "zellij" | "wezterm";
 
