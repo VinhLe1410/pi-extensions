@@ -145,7 +145,7 @@ export default function (pi: ExtensionAPI) {
             const footerModel = buildFooterModel(ctx, gitCache, {
               showCwd,
               showBranch,
-              fastMode: codexFastMode,
+              fastMode: codexFastMode && ctx.model?.provider === "openai-codex",
               cwd: process.cwd(),
               homeDir: process.env.HOME || process.env.USERPROFILE,
             });

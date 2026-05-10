@@ -1,3 +1,4 @@
+import { watch, type FSWatcher } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -21,9 +22,6 @@ function isOpenAICodexResponsesPayload(
 ): payload is Record<string, unknown> {
   if (!isRecord(payload)) return false;
 
-  const model = payload.model;
-  if (typeof model === "string" && model.includes("codex")) return true;
-
   return (
     payload.stream === true &&
     typeof payload.instructions === "string" &&
@@ -33,9 +31,8 @@ function isOpenAICodexResponsesPayload(
   );
 }
 
-function isCodexModel(model: ExtensionContext["model"]): boolean {
-  if (!model) return false;
-  return model.provider === "openai-codex" || model.id.includes("codex");
+function isOpenAICodexModel(model: ExtensionContext["model"]): boolean {
+  return model?.provider === "openai-codex";
 }
 
 function emitState(pi: ExtensionAPI, enabled: boolean): void {
@@ -85,18 +82,70 @@ async function saveFastModeEnabled(enabled: boolean): Promise<void> {
 
 export default function (pi: ExtensionAPI) {
   let fastModeEnabled = false;
-  let currentModelIsCodex = false;
+  let currentModelIsOpenAICodex = false;
+  let settingsWatcher: FSWatcher | undefined;
+  let settingsRefreshTimer: NodeJS.Timeout | undefined;
 
   function emitCurrentState(): void {
-    emitState(pi, fastModeEnabled && currentModelIsCodex);
+    emitState(pi, fastModeEnabled && currentModelIsOpenAICodex);
+  }
+
+  async function syncFastModeEnabled(
+    ctx?: ExtensionContext,
+    severity: "warning" | "error" = "warning",
+  ): Promise<boolean> {
+    try {
+      fastModeEnabled = await loadFastModeEnabled();
+      return true;
+    } catch (error) {
+      fastModeEnabled = false;
+      if (ctx?.hasUI) {
+        ctx.ui.notify(
+          `Failed to load fast mode setting: ${(error as Error).message}`,
+          severity,
+        );
+      }
+      return false;
+    }
+  }
+
+  function scheduleSettingsRefresh(): void {
+    if (settingsRefreshTimer) clearTimeout(settingsRefreshTimer);
+    settingsRefreshTimer = setTimeout(() => {
+      settingsRefreshTimer = undefined;
+      void syncFastModeEnabled().then(() => emitCurrentState());
+    }, 50);
+  }
+
+  function startSettingsWatcher(): void {
+    if (settingsWatcher) return;
+    try {
+      settingsWatcher = watch(settingsPath(), { persistent: false }, () => {
+        scheduleSettingsRefresh();
+      });
+    } catch {
+      settingsWatcher = undefined;
+    }
+  }
+
+  function stopSettingsWatcher(): void {
+    settingsWatcher?.close();
+    settingsWatcher = undefined;
+    if (settingsRefreshTimer) clearTimeout(settingsRefreshTimer);
+    settingsRefreshTimer = undefined;
   }
 
   pi.registerCommand("fast-mode", {
     description: "Toggle priority service tier for OpenAI Codex models",
     handler: async (_args, ctx) => {
-      currentModelIsCodex = isCodexModel(ctx.model);
-      if (!currentModelIsCodex) {
+      const synced = await syncFastModeEnabled(ctx, "error");
+      currentModelIsOpenAICodex = isOpenAICodexModel(ctx.model);
+      if (!currentModelIsOpenAICodex) {
         ctx.ui.notify("Fast mode only works with OpenAI Codex models", "warning");
+        emitCurrentState();
+        return;
+      }
+      if (!synced) {
         emitCurrentState();
         return;
       }
@@ -110,28 +159,38 @@ export default function (pi: ExtensionAPI) {
       }
 
       fastModeEnabled = nextFastModeEnabled;
+      startSettingsWatcher();
       emitCurrentState();
       ctx.ui.notify(`Fast mode ${fastModeEnabled ? "enabled" : "disabled"}`, "info");
     },
   });
 
   pi.on("session_start", async (_event, ctx) => {
-    try {
-      fastModeEnabled = await loadFastModeEnabled();
-    } catch (error) {
-      ctx.ui.notify(`Failed to load fast mode setting: ${(error as Error).message}`, "warning");
+    await syncFastModeEnabled(ctx);
+    currentModelIsOpenAICodex = isOpenAICodexModel(ctx.model);
+    startSettingsWatcher();
+    emitCurrentState();
+  });
+
+  pi.on("session_shutdown", () => {
+    stopSettingsWatcher();
+  });
+
+  pi.on("model_select", async (event, ctx) => {
+    await syncFastModeEnabled(ctx);
+    currentModelIsOpenAICodex = isOpenAICodexModel(event.model);
+    emitCurrentState();
+  });
+
+  pi.on("before_provider_request", async (event, ctx) => {
+    currentModelIsOpenAICodex = isOpenAICodexModel(ctx.model);
+    if (!currentModelIsOpenAICodex) {
+      emitCurrentState();
+      return;
     }
 
-    currentModelIsCodex = isCodexModel(ctx.model);
+    await syncFastModeEnabled(ctx);
     emitCurrentState();
-  });
-
-  pi.on("model_select", (event) => {
-    currentModelIsCodex = isCodexModel(event.model);
-    emitCurrentState();
-  });
-
-  pi.on("before_provider_request", (event) => {
     if (!fastModeEnabled) return;
     if (!isOpenAICodexResponsesPayload(event.payload)) return;
 
