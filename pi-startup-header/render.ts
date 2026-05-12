@@ -236,6 +236,7 @@ export function renderHeader(width: number, theme: Theme, pi: ExtensionAPI, curr
   lines.push(center(`${theme.fg("accent", currentModelId)} ${theme.fg("dim", "·")} ${theme.fg("text", projectName())}`, width));
   lines.push("");
   lines.push(...renderCenteredBox(theme, width, "customizations", details));
+  lines.push("");
 
   return lines;
 }
