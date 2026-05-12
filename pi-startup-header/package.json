@@ -1,5 +1,5 @@
 {
   "name": "pi-startup-header",
   "private": true,
-  "description": "Plain startup header for Pi"
+  "description": "Custom startup dashboard header for Pi"
 }
