@@ -1,6 +1,6 @@
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 
-export const SEPARATOR = " · ";
+export const SEPARATOR = " • ";
 export const RESET_ICON = "";
 
 export function separator(theme: Theme): string {

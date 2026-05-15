@@ -1,0 +1,11 @@
+packages:
+  - pi-custom-input
+  - pi-codex-fast
+  - pi-usage-stats
+  - zsh-user-bash
+  - pi-tps-tracker
+  - pi-whimsical
+allowBuilds:
+  '@google/genai': true
+  koffi: true
+  protobufjs: true
