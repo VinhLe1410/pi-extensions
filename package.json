@@ -9,7 +9,8 @@
     "zsh-user-bash",
     "pi-tps-tracker",
     "pi-startup-header",
-    "pi-whimsical"
+    "pi-whimsical",
+    "pi-rounded-input"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit"
