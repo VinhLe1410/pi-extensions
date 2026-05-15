@@ -1,4 +1,5 @@
-export const USAGE_REFRESH_INTERVAL = 5 * 60_000; // 5 minutes
+export const USAGE_REFRESH_INTERVAL = 2 * 60_000; // 2 minutes
+export const GIT_REFRESH_INTERVAL_MS = 1000;
 
 // Map pi provider names to our internal usage provider keys.
 export const PROVIDER_MAP: Record<string, string> = {
