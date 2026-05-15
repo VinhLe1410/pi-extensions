@@ -1,5 +1,5 @@
 import { CustomEditor } from "@earendil-works/pi-coding-agent";
-import type { KeybindingsManager } from "@earendil-works/pi-coding-agent";
+import type { KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
@@ -27,15 +27,18 @@ function isHorizontalBorder(line: string): boolean {
 
 export class RoundedInputEditor extends CustomEditor {
   private getLabels: () => BorderLabels;
+  private labelTheme: Theme;
 
   constructor(
     tui: TUI,
     theme: EditorTheme,
     keybindings: KeybindingsManager,
     getLabels: () => BorderLabels,
+    labelTheme: Theme,
   ) {
     super(tui, theme, keybindings);
     this.getLabels = getLabels;
+    this.labelTheme = labelTheme;
   }
 
   render(width: number): string[] {
@@ -57,24 +60,22 @@ export class RoundedInputEditor extends CustomEditor {
     };
 
     const labels = this.getLabels();
-    const emptyLine = this.borderColor("│") + " ".repeat(innerWidth) + this.borderColor("│");
 
     return [
       this.renderBorder("top", innerWidth, labels.topLeft, labels.topRight),
-      emptyLine,
       ...bodyLines.map(wrapLine),
       ...(suggestionLines.length > 0
-        ? [emptyLine, this.renderSectionSeparator(innerWidth, "Suggestions"), emptyLine, ...suggestionLines.map(wrapLine)]
+        ? [this.renderSectionSeparator(innerWidth, "auto-suggestions"), ...suggestionLines.map(wrapLine)]
         : []),
-      emptyLine,
       this.renderBorder("bottom", innerWidth, labels.bottomLeft, labels.bottomRight),
     ];
   }
 
   private renderSectionSeparator(innerWidth: number, label: string): string {
     const labelText = ` ${label} `;
+    const styledLabel = this.labelTheme.fg("dim", labelText);
     const fill = Math.max(0, innerWidth - visibleWidth(labelText) - 1);
-    return this.borderColor("├─") + labelText + this.borderColor(`${"─".repeat(fill)}┤`);
+    return this.borderColor("├─") + styledLabel + this.borderColor(`${"─".repeat(fill)}┤`);
   }
 
   private renderBorder(

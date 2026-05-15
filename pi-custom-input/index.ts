@@ -66,7 +66,7 @@ export default function (pi: ExtensionAPI) {
       return new RoundedInputEditor(tui, theme, keybindings, () => {
         refreshGitIfStale();
         return buildBorderLabels(ctx, ctx.ui.theme, git.current(), usage);
-      });
+      }, ctx.ui.theme);
     });
 
     ctx.ui.setFooter((_tui: TUI, theme: Theme, footerData: ReadonlyFooterDataProvider) => ({
