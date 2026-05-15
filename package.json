@@ -8,7 +8,8 @@
     "pi-usage-stats",
     "zsh-user-bash",
     "pi-tps-tracker",
-    "pi-startup-header"
+    "pi-startup-header",
+    "pi-whimsical"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit"
