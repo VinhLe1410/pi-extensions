@@ -1,0 +1,5 @@
+{
+  "name": "pi-custom-input",
+  "private": true,
+  "description": "Pi custom input editor with model, usage, location, and context border labels"
+}

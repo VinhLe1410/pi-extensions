@@ -3,14 +3,12 @@
   "private": true,
   "packageManager": "bun@1.3.5",
   "workspaces": [
-    "pi-custom-footer",
+    "pi-custom-input",
     "pi-codex-fast",
     "pi-usage-stats",
     "zsh-user-bash",
     "pi-tps-tracker",
-    "pi-startup-header",
-    "pi-whimsical",
-    "pi-rounded-input"
+    "pi-whimsical"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit"

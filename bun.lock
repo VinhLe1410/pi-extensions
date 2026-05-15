@@ -12,14 +12,20 @@
         "typescript": "^5.0.0",
       },
     },
-    "pi-custom-footer": {
-      "name": "pi-custom-footer",
+    "pi-codex-fast": {
+      "name": "pi-codex-fast",
     },
-    "pi-subagents": {
-      "name": "pi-subagents",
+    "pi-custom-input": {
+      "name": "pi-custom-input",
+    },
+    "pi-tps-tracker": {
+      "name": "pi-tps-tracker",
     },
     "pi-usage-stats": {
       "name": "pi-usage-stats",
+    },
+    "pi-whimsical": {
+      "name": "pi-whimsical",
     },
     "zsh-user-bash": {
       "name": "zsh-user-bash",
@@ -428,11 +434,15 @@
 
     "pend": ["pend@1.2.0", "", {}, "sha512-F3asv42UuXchdzt+xXqfW1OGlVBe+mxa2mqI0pg5yAHZPvFmY3Y6drSf/GQ1A86WgWEN9Kzh/WrgKa6iGcHXLg=="],
 
-    "pi-custom-footer": ["pi-custom-footer@workspace:pi-custom-footer"],
+    "pi-codex-fast": ["pi-codex-fast@workspace:pi-codex-fast"],
 
-    "pi-subagents": ["pi-subagents@workspace:pi-subagents"],
+    "pi-custom-input": ["pi-custom-input@workspace:pi-custom-input"],
+
+    "pi-tps-tracker": ["pi-tps-tracker@workspace:pi-tps-tracker"],
 
     "pi-usage-stats": ["pi-usage-stats@workspace:pi-usage-stats"],
+
+    "pi-whimsical": ["pi-whimsical@workspace:pi-whimsical"],
 
     "proper-lockfile": ["proper-lockfile@4.1.2", "", { "dependencies": { "graceful-fs": "^4.2.4", "retry": "^0.12.0", "signal-exit": "^3.0.2" } }, "sha512-TjNPblN4BwAWMXU8s9AEz4JmQxnD1NNL7bNOY/AKUzyamc379FWASUhc/K1pL2noVb+XmZKLL68cjzLsiOAMaA=="],
 
