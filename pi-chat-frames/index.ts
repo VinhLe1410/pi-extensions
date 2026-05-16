@@ -3,7 +3,8 @@ import {
   ToolExecutionComponent,
   UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
-import { patchRender, unpatchRender } from "./core/patch";
+import { patchRender } from "./core/patch";
+import { unpatchRender } from "./core/patch-manager";
 import { setActiveTheme } from "./core/state";
 import type { Renderable } from "./core/types";
 

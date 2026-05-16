@@ -55,6 +55,47 @@ function trimTrailingBlankLines(lines: string[]): string[] {
   return lines.slice(0, end);
 }
 
+function isTerminalImageLine(line: string): boolean {
+  return line.includes("\x1b_G") || line.includes("\x1b]1337;File=");
+}
+
+function getTerminalImagePlaceholderRowCount(line: string): number {
+  const match = /^\x1b\[(\d+)A/.exec(line);
+  return match ? Number(match[1]) : 0;
+}
+
+function splitTerminalImageRows(lines: string[]): { textLines: string[]; imageRows: string[] } {
+  const textLines: string[] = [];
+  const imageRows: string[] = [];
+
+  for (const line of lines) {
+    if (!isTerminalImageLine(line)) {
+      textLines.push(line);
+      continue;
+    }
+
+    const imageLeadingRows: string[] = [];
+    const placeholderRows = getTerminalImagePlaceholderRowCount(line);
+    for (let index = 0; index < placeholderRows; index++) {
+      const previousLine = textLines.at(-1);
+      if (previousLine === undefined || stripAnsi(previousLine).trim() !== "") break;
+      imageLeadingRows.unshift(textLines.pop() ?? "");
+    }
+
+    if (textLines.at(-1) === "") {
+      imageLeadingRows.unshift(textLines.pop() ?? "");
+    }
+
+    imageRows.push(...imageLeadingRows, line);
+  }
+
+  return { textLines, imageRows };
+}
+
+function indentTerminalImageRows(lines: string[]): string[] {
+  return lines.map((line) => (isTerminalImageLine(line) ? `\x1b[1C${line}` : line));
+}
+
 function backgroundFrom(line: string | undefined): string {
   return line?.match(/\x1b\[(?:48;5;\d+|48;2;\d+;\d+;\d+)m/)?.[0] ?? "";
 }
@@ -173,7 +214,21 @@ export function renderFrame(
     return stripped.line;
   });
 
-  const topTrim = kind === "tool" ? trimLeadingBlankLines(cleanBody) : { lines: cleanBody, removed: 0 };
+  const innerWidth = width - 2;
+  const { textLines, imageRows } = kind === "tool"
+    ? splitTerminalImageRows(cleanBody)
+    : { textLines: cleanBody, imageRows: [] };
+  const framedImageRows = indentTerminalImageRows(imageRows);
+  const topTrim = kind === "tool" ? trimLeadingBlankLines(textLines) : { lines: textLines, removed: 0 };
+  if (topTrim.lines.length === 0) {
+    return [
+      ...leading,
+      (sawStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
+      (sawEnd ? OSC133_ZONE_END + OSC133_ZONE_FINAL : "") + bottomBorder(kind, innerWidth, toolState),
+      ...framedImageRows,
+    ];
+  }
+
   const headerLineSpan = Math.max(1, options.headerLineSpan ?? 1);
   const headerBody = options.headerLine && topTrim.lines.length > 0
     ? [options.headerLine, ...topTrim.lines.slice(headerLineSpan)]
@@ -181,7 +236,6 @@ export function renderFrame(
   const shouldPullHint = kind === "tool" && options.pendingLineMode !== "replace";
   const pulledHint = shouldPullHint ? pullToolHintFromLines(headerBody) : { lines: headerBody };
 
-  const innerWidth = width - 2;
   const trimmedBody = pulledHint.bottomRight ? trimTrailingBlankLines(pulledHint.lines) : pulledHint.lines;
   const bottomRight = pulledHint.bottomRight;
   const originalSeparatorAfter = options.separatorAfter === undefined ? undefined : Math.max(1, options.separatorAfter - topTrim.removed);
@@ -215,5 +269,6 @@ export function renderFrame(
     (sawStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
     ...separated,
     (sawEnd ? OSC133_ZONE_END + OSC133_ZONE_FINAL : "") + bottomBorder(kind, innerWidth, toolState, bottomRight),
+    ...framedImageRows,
   ];
 }
