@@ -62,11 +62,11 @@ export class RoundedInputEditor extends CustomEditor {
   }
 
   render(width: number): string[] {
-    if (width < 2) return super.render(width);
+    if (width < 1) return super.render(width);
 
-    const innerWidth = width - 2;
-    const contentWidth = Math.max(1, innerWidth - INPUT_PADDING_LEFT);
-    const leftPadding = " ".repeat(Math.min(INPUT_PADDING_LEFT, innerWidth));
+    const lineWidth = width;
+    const contentWidth = Math.max(1, lineWidth - INPUT_PADDING_LEFT);
+    const leftPadding = " ".repeat(Math.min(INPUT_PADDING_LEFT, lineWidth));
     const lines = super.render(contentWidth);
     const bottomIndex = lines.findIndex((line, index) => index > 0 && isHorizontalBorder(line));
     const bodyEnd = bottomIndex === -1 ? lines.length : bottomIndex;
@@ -77,65 +77,54 @@ export class RoundedInputEditor extends CustomEditor {
     const applyBackground = createBackgroundApplier(backgroundAnsi);
     const wrapLine = (line: string): string => {
       const paddedLine = leftPadding + line;
-      const content = padRight(truncateToWidth(paddedLine, innerWidth, ""), innerWidth);
-      return this.borderColor("│") + applyBackground(content) + this.borderColor("│");
+      const content = padRight(truncateToWidth(paddedLine, lineWidth, ""), lineWidth);
+      return applyBackground(content);
     };
 
     return [
-      this.renderBorder("top", innerWidth, labels.topLeft, labels.topRight),
+      this.renderRule(lineWidth, labels.topLeft, labels.topRight),
       wrapLine(""),
       ...bodyLines.map(wrapLine),
       wrapLine(""),
       ...(suggestionLines.length > 0
         ? [
-            this.renderSectionSeparator(innerWidth, "auto-suggestions"),
+            this.renderSectionSeparator(lineWidth, "auto-suggestions"),
             wrapLine(""),
             ...suggestionLines.map(wrapLine),
             wrapLine(""),
           ]
         : []),
-      this.renderBorder("bottom", innerWidth, labels.bottomLeft, labels.bottomRight),
+      this.renderRule(lineWidth, labels.bottomLeft, labels.bottomRight),
     ];
   }
 
-  private renderSectionSeparator(innerWidth: number, label: string): string {
+  private renderSectionSeparator(lineWidth: number, label: string): string {
     const labelText = ` ${label} `;
     const styledLabel = this.labelTheme.fg("dim", labelText);
-    const fill = Math.max(0, innerWidth - visibleWidth(labelText) - 1);
-    return this.borderColor("├─") + styledLabel + this.borderColor(`${"─".repeat(fill)}┤`);
+    const prefix = "──";
+    const fill = Math.max(0, lineWidth - visibleWidth(labelText) - visibleWidth(prefix));
+    return this.borderColor(prefix) + styledLabel + this.borderColor("─".repeat(fill));
   }
 
-  private renderBorder(
-    position: "top" | "bottom",
-    innerWidth: number,
+  private renderRule(
+    lineWidth: number,
     left: string | null,
     right: string | null,
   ): string {
-    const open = position === "top" ? "╭" : "╰";
-    const close = position === "top" ? "╮" : "╯";
-    if (innerWidth < 3 || (!left && !right)) {
-      return this.borderColor(`${open}${"─".repeat(innerWidth)}${close}`);
-    }
+    if (lineWidth < 1) return "";
+    if (!left && !right) return this.borderColor("─".repeat(lineWidth));
 
     const leftText = left ? ` ${left} ` : "";
     const rightText = right ? ` ${right} ` : "";
-    const leftCapWidth = leftText ? 1 : 0;
-    const rightCapWidth = rightText ? 1 : 0;
-    const reserved = visibleWidth(leftText) + visibleWidth(rightText) + leftCapWidth + rightCapWidth;
+    const leftPrefix = leftText ? "──" : "";
+    const rightSuffix = rightText ? "──" : "";
+    const reserved = visibleWidth(leftPrefix) + visibleWidth(leftText) + visibleWidth(rightText) + visibleWidth(rightSuffix);
 
-    if (reserved >= innerWidth) {
-      const label = truncateToWidth(leftText || rightText, Math.max(0, innerWidth - 1), "");
-      const fill = Math.max(0, innerWidth - visibleWidth(label) - 1);
-      return this.borderColor(`${open}─`) + label + this.borderColor(`${"─".repeat(fill)}${close}`);
+    if (reserved >= lineWidth) {
+      return truncateToWidth(leftText || rightText, lineWidth, "");
     }
 
-    const gap = Math.max(1, innerWidth - reserved);
-    return (
-      this.borderColor(open + (leftText ? "─" : "")) +
-      leftText +
-      this.borderColor("─".repeat(gap)) +
-      rightText +
-      this.borderColor((rightText ? "─" : "") + close)
-    );
+    const gap = lineWidth - reserved;
+    return this.borderColor(leftPrefix) + leftText + this.borderColor("─".repeat(gap)) + rightText + this.borderColor(rightSuffix);
   }
 }
