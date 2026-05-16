@@ -11,6 +11,7 @@ import {
   stripOscMarkers,
 } from "./ansi";
 import { pullToolHintFromLines } from "./hints";
+import { indentTerminalImageRows, splitTerminalImageRows } from "./terminal-images";
 import { frameColor, labelColor } from "./theme";
 
 export interface FrameOptions {
@@ -54,47 +55,6 @@ function trimTrailingBlankLines(lines: string[]): string[] {
     end--;
   }
   return lines.slice(0, end);
-}
-
-function isTerminalImageLine(line: string): boolean {
-  return line.includes("\x1b_G") || line.includes("\x1b]1337;File=");
-}
-
-function getTerminalImagePlaceholderRowCount(line: string): number {
-  const match = /^\x1b\[(\d+)A/.exec(line);
-  return match ? Number(match[1]) : 0;
-}
-
-function splitTerminalImageRows(lines: string[]): { textLines: string[]; imageRows: string[] } {
-  const textLines: string[] = [];
-  const imageRows: string[] = [];
-
-  for (const line of lines) {
-    if (!isTerminalImageLine(line)) {
-      textLines.push(line);
-      continue;
-    }
-
-    const imageLeadingRows: string[] = [];
-    const placeholderRows = getTerminalImagePlaceholderRowCount(line);
-    for (let index = 0; index < placeholderRows; index++) {
-      const previousLine = textLines.at(-1);
-      if (previousLine === undefined || stripAnsi(previousLine).trim() !== "") break;
-      imageLeadingRows.unshift(textLines.pop() ?? "");
-    }
-
-    if (textLines.at(-1) === "") {
-      imageLeadingRows.unshift(textLines.pop() ?? "");
-    }
-
-    imageRows.push(...imageLeadingRows, line);
-  }
-
-  return { textLines, imageRows };
-}
-
-function indentTerminalImageRows(lines: string[]): string[] {
-  return lines.map((line) => (isTerminalImageLine(line) ? `\x1b[1C${line}` : line));
 }
 
 function backgroundFrom(line: string | undefined): string {
