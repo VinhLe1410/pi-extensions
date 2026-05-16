@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import type { GitCache } from "../core/types";
 
 const EMPTY_GIT_CACHE: GitCache = {
@@ -9,7 +9,7 @@ const EMPTY_GIT_CACHE: GitCache = {
 };
 
 export interface GitState {
-  refresh(): boolean;
+  refresh(): Promise<boolean>;
   current(): GitCache;
 }
 
@@ -54,19 +54,36 @@ function sameGitCache(a: GitCache | null, b: GitCache | null): boolean {
   );
 }
 
+function readGitStatus(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      "git",
+      ["status", "--porcelain=v2", "--branch"],
+      {
+        encoding: "utf8",
+        timeout: 1000,
+        windowsHide: true,
+      },
+      (error, stdout) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(stdout);
+      },
+    );
+  });
+}
+
 export function createGitState(): GitState {
   let cache: GitCache | null = null;
 
   return {
-    refresh(): boolean {
+    async refresh(): Promise<boolean> {
       let next: GitCache | null = null;
 
       try {
-        const status = execFileSync("git", ["status", "--porcelain=v2", "--branch"], {
-          encoding: "utf8",
-          timeout: 1000,
-          stdio: ["ignore", "pipe", "ignore"],
-        });
+        const status = await readGitStatus();
         next = parseGitStatus(status.trimEnd());
       } catch {
         next = null;

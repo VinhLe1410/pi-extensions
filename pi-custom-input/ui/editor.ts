@@ -12,6 +12,11 @@ export interface BorderLabels {
   bottomRight: string | null;
 }
 
+export interface EditorChrome {
+  labels: BorderLabels;
+  backgroundAnsi: string | null;
+}
+
 function padRight(text: string, width: number): string {
   return text + " ".repeat(Math.max(0, width - visibleWidth(text)));
 }
@@ -31,28 +36,29 @@ function reapplyBackgroundAfterReset(text: string, backgroundAnsi: string): stri
     .replace(/\x1b\[49m/g, (reset) => `${reset}${backgroundAnsi}`);
 }
 
-function applyLineBackground(text: string, backgroundAnsi: string | null): string {
-  if (!backgroundAnsi) return text;
-  return `${backgroundAnsi}${reapplyBackgroundAfterReset(text, backgroundAnsi)}\x1b[49m`;
+function createBackgroundApplier(backgroundAnsi: string | null): (text: string) => string {
+  if (!backgroundAnsi) return (text) => text;
+
+  return (text) => {
+    if (!text.includes("\x1b[")) return `${backgroundAnsi}${text}\x1b[49m`;
+    return `${backgroundAnsi}${reapplyBackgroundAfterReset(text, backgroundAnsi)}\x1b[49m`;
+  };
 }
 
 export class RoundedInputEditor extends CustomEditor {
-  private getLabels: () => BorderLabels;
+  private getChrome: () => EditorChrome;
   private labelTheme: Theme;
-  private getBackgroundAnsi: () => string | null;
 
   constructor(
     tui: TUI,
     theme: EditorTheme,
     keybindings: KeybindingsManager,
-    getLabels: () => BorderLabels,
+    getChrome: () => EditorChrome,
     labelTheme: Theme,
-    getBackgroundAnsi: () => string | null,
   ) {
     super(tui, theme, keybindings);
-    this.getLabels = getLabels;
+    this.getChrome = getChrome;
     this.labelTheme = labelTheme;
-    this.getBackgroundAnsi = getBackgroundAnsi;
   }
 
   render(width: number): string[] {
@@ -67,14 +73,13 @@ export class RoundedInputEditor extends CustomEditor {
     const bodyLines = lines.slice(1, bodyEnd);
     const suggestionLines = bottomIndex === -1 ? [] : lines.slice(bottomIndex + 1);
 
-    const backgroundAnsi = this.getBackgroundAnsi();
+    const { labels, backgroundAnsi } = this.getChrome();
+    const applyBackground = createBackgroundApplier(backgroundAnsi);
     const wrapLine = (line: string): string => {
       const paddedLine = leftPadding + line;
       const content = padRight(truncateToWidth(paddedLine, innerWidth, ""), innerWidth);
-      return this.borderColor("│") + applyLineBackground(content, backgroundAnsi) + this.borderColor("│");
+      return this.borderColor("│") + applyBackground(content) + this.borderColor("│");
     };
-
-    const labels = this.getLabels();
 
     return [
       this.renderBorder("top", innerWidth, labels.topLeft, labels.topRight),

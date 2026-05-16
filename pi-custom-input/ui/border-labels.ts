@@ -88,12 +88,13 @@ export function buildBorderLabels(
   git: GitCache,
   usageState: UsageState,
   fastModeEnabled: boolean,
+  thinkingLevel = getThinkingLevel(ctx),
 ): BorderLabels {
   const modelName = ctx.model?.name ?? null;
   const topLeft = modelName
     ? [
         theme.fg("accent", ` ${modelName}`),
-        renderThinking(theme, getThinkingLevel(ctx)),
+        renderThinking(theme, thinkingLevel),
         ...(fastModeEnabled ? [theme.fg("success", `󱐋 fast`)] : []),
       ].join(separator(theme))
     : null;

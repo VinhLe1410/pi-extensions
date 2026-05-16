@@ -40,15 +40,35 @@ export default function (pi: ExtensionAPI) {
   });
 
   let activeTui: TUI | undefined;
-  let lastGitRefresh = 0;
+  let gitRefreshTimer: ReturnType<typeof setInterval> | undefined;
+  let gitRefreshInFlight = false;
   let cleanupUsageListener: (() => void) | undefined;
   let fastModeEnabled = false;
 
-  function refreshGitIfStale(): void {
-    const now = Date.now();
-    if (now - lastGitRefresh < GIT_REFRESH_INTERVAL_MS) return;
-    lastGitRefresh = now;
-    git.refresh();
+  function refreshGit(): void {
+    if (gitRefreshInFlight) return;
+
+    gitRefreshInFlight = true;
+    git.refresh()
+      .then((changed) => {
+        if (changed) activeTui?.requestRender();
+      })
+      .finally(() => {
+        gitRefreshInFlight = false;
+      });
+  }
+
+  function startGitRefresh(): void {
+    if (gitRefreshTimer) clearInterval(gitRefreshTimer);
+    refreshGit();
+    gitRefreshTimer = setInterval(refreshGit, GIT_REFRESH_INTERVAL_MS);
+  }
+
+  function stopGitRefresh(): void {
+    if (gitRefreshTimer) {
+      clearInterval(gitRefreshTimer);
+      gitRefreshTimer = undefined;
+    }
   }
 
   function startUsageForProvider(modelProvider: string | undefined): void {
@@ -61,8 +81,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on("session_start", (_event, ctx) => {
-    git.refresh();
-    lastGitRefresh = Date.now();
+    startGitRefresh();
     if (!ctx.hasUI) return;
 
     startUsageForProvider(ctx.model?.provider);
@@ -74,9 +93,12 @@ export default function (pi: ExtensionAPI) {
       cleanupUsageListener = usage.onChange(() => tui.requestRender());
 
       return new RoundedInputEditor(tui, theme, keybindings, () => {
-        refreshGitIfStale();
-        return buildBorderLabels(ctx, ctx.ui.theme, git.current(), usage, fastModeEnabled);
-      }, ctx.ui.theme, () => thinkingBackgroundAnsi(ctx.ui.theme, getThinkingLevel(ctx)));
+        const thinkingLevel = getThinkingLevel(ctx);
+        return {
+          labels: buildBorderLabels(ctx, ctx.ui.theme, git.current(), usage, fastModeEnabled, thinkingLevel),
+          backgroundAnsi: thinkingBackgroundAnsi(ctx.ui.theme, thinkingLevel),
+        };
+      }, ctx.ui.theme);
     });
 
     ctx.ui.setFooter((_tui: TUI, theme: Theme, footerData: ReadonlyFooterDataProvider) => ({
@@ -88,6 +110,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", () => {
+    stopGitRefresh();
     cleanupUsageListener?.();
     cleanupUsageListener = undefined;
     activeTui = undefined;
@@ -102,8 +125,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("turn_end", () => {
-    if (git.refresh()) activeTui?.requestRender();
-    lastGitRefresh = Date.now();
+    refreshGit();
   });
 
   pi.on("model_select", (event) => {
