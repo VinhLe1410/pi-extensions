@@ -1,22 +1,12 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
+import { CACHE_BYPASS_REASONS, type CacheBypassReason } from "./render-cache";
 import type { FrameKind } from "./types";
 
 const DEBUG_WIDGET_ID = "pi-chat-frames-debug";
 const MAX_SAMPLES = 100;
 const REFRESH_INTERVAL_MS = 250;
 const FRAME_KINDS: FrameKind[] = ["user", "tool", "skill", "custom", "bash", "compaction", "branch"];
-const CACHE_BYPASS_REASONS = [
-  "narrow-width",
-  "empty-render",
-  "pending-tool",
-  "source-too-large",
-  "terminal-image",
-  "tool-args",
-  "output-too-large",
-] as const;
-
-export type CacheBypassReason = (typeof CACHE_BYPASS_REASONS)[number];
 
 interface RenderSample {
   kind: FrameKind;

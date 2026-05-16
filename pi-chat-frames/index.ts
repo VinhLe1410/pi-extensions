@@ -9,6 +9,7 @@ import {
   UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
 import { clearDebugWidget, registerDebugWidget } from "./core/debug";
+import { patchRenderWithDebug } from "./core/debug-patch";
 import { patchRender } from "./core/patch";
 import { clearFrameRenderCache } from "./core/render-cache";
 import { unpatchRender } from "./core/patch-manager";
@@ -24,23 +25,26 @@ export default function chatFrames(pi: ExtensionAPI) {
   const compactionPrototype = CompactionSummaryMessageComponent.prototype as Renderable;
   const branchPrototype = BranchSummaryMessageComponent.prototype as Renderable;
 
-  patchRender(userPrototype, "user");
-  patchRender(toolPrototype, "tool");
-  patchRender(skillPrototype, "skill");
-  patchRender(customPrototype, "custom");
-  patchRender(bashPrototype, "bash");
-  patchRender(compactionPrototype, "compaction");
-  patchRender(branchPrototype, "branch");
+  const debugEnabled = process.env.PI_CHAT_FRAMES_DEBUG === "1";
+  const applyPatch = debugEnabled ? patchRenderWithDebug : patchRender;
+
+  applyPatch(userPrototype, "user");
+  applyPatch(toolPrototype, "tool");
+  applyPatch(skillPrototype, "skill");
+  applyPatch(customPrototype, "custom");
+  applyPatch(bashPrototype, "bash");
+  applyPatch(compactionPrototype, "compaction");
+  applyPatch(branchPrototype, "branch");
 
   pi.on("session_start", (_event, ctx) => {
     clearFrameRenderCache();
     setActiveTheme(ctx.ui.theme);
-    registerDebugWidget(ctx);
+    if (debugEnabled) registerDebugWidget(ctx);
   });
 
   pi.on("session_shutdown", () => {
     clearFrameRenderCache();
-    clearDebugWidget();
+    if (debugEnabled) clearDebugWidget();
     unpatchRender(userPrototype);
     unpatchRender(toolPrototype);
     unpatchRender(skillPrototype);

@@ -1,6 +1,5 @@
 import type { Component } from "@earendil-works/pi-tui";
 import type { FrameKind, ToolState } from "./types";
-import { recordFrameCacheAccess, recordFrameCacheBypass, type CacheBypassReason } from "./debug";
 
 const MAX_SOURCE_ROWS = 200;
 const MAX_OUTPUT_ROWS = 250;
@@ -14,13 +13,32 @@ interface ToolCacheLike extends Component {
   getRenderShell?: () => "default" | "self";
 }
 
-interface FrameCacheRequest {
+export const CACHE_BYPASS_REASONS = [
+  "narrow-width",
+  "empty-render",
+  "pending-tool",
+  "source-too-large",
+  "terminal-image",
+  "tool-args",
+  "output-too-large",
+] as const;
+
+export type CacheBypassReason = (typeof CACHE_BYPASS_REASONS)[number];
+
+export interface FrameCacheRequest {
   component: Component;
   width: number;
   kind: FrameKind;
   toolState: ToolState;
   rendered: string[];
 }
+
+export type FrameCacheLookupResult =
+  | { status: "hit"; rows: string[] }
+  | { status: "miss" }
+  | { status: "bypass"; reason: CacheBypassReason };
+
+export type FrameCacheStoreResult = { status: "stored" } | { status: "bypass"; reason: CacheBypassReason };
 
 interface CacheEntry {
   key: string;
@@ -84,28 +102,31 @@ function isOutputCacheable(rows: string[]): boolean {
   return rows.length <= MAX_OUTPUT_ROWS && totalChars(rows) <= MAX_OUTPUT_CHARS && !hasTerminalImageRows(rows);
 }
 
-export function getCachedFrameRows(request: FrameCacheRequest): string[] | undefined {
+export function getFrameCacheRows(request: FrameCacheRequest): FrameCacheLookupResult {
   const result = frameCacheKey(request);
-  if ("bypass" in result) {
-    recordFrameCacheBypass(result.bypass);
-    return undefined;
-  }
+  if ("bypass" in result) return { status: "bypass", reason: result.bypass };
 
   const entry = cache.get(request.component);
-  const hit = entry?.key === result.key;
-  recordFrameCacheAccess(request.kind, hit);
-  return hit ? entry.rows : undefined;
+  if (entry?.key === result.key) return { status: "hit", rows: entry.rows };
+  return { status: "miss" };
+}
+
+export function getCachedFrameRows(request: FrameCacheRequest): string[] | undefined {
+  const result = getFrameCacheRows(request);
+  return result.status === "hit" ? result.rows : undefined;
+}
+
+export function setFrameCacheRows(request: FrameCacheRequest, rows: string[]): FrameCacheStoreResult {
+  const result = frameCacheKey(request);
+  if ("bypass" in result) return { status: "bypass", reason: result.bypass };
+  if (!isOutputCacheable(rows)) return { status: "bypass", reason: "output-too-large" };
+
+  cache.set(request.component, { key: result.key, rows });
+  return { status: "stored" };
 }
 
 export function setCachedFrameRows(request: FrameCacheRequest, rows: string[]): void {
-  const result = frameCacheKey(request);
-  if ("bypass" in result) return;
-  if (!isOutputCacheable(rows)) {
-    recordFrameCacheBypass("output-too-large");
-    return;
-  }
-
-  cache.set(request.component, { key: result.key, rows });
+  setFrameCacheRows(request, rows);
 }
 
 export function clearFrameRenderCache(): void {
