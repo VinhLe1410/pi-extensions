@@ -15,6 +15,7 @@ import { frameColor, labelColor } from "./theme";
 export interface FrameOptions {
   separatorAfter?: number;
   headerLine?: string;
+  headerLineSpan?: number;
   pendingLine?: string;
   pendingLineMode?: "replace" | "prepend";
 }
@@ -173,14 +174,21 @@ export function renderFrame(
   });
 
   const topTrim = kind === "tool" ? trimLeadingBlankLines(cleanBody) : { lines: cleanBody, removed: 0 };
-  const headerBody = options.headerLine && topTrim.lines.length > 0 ? [options.headerLine, ...topTrim.lines.slice(1)] : topTrim.lines;
+  const headerLineSpan = Math.max(1, options.headerLineSpan ?? 1);
+  const headerBody = options.headerLine && topTrim.lines.length > 0
+    ? [options.headerLine, ...topTrim.lines.slice(headerLineSpan)]
+    : topTrim.lines;
   const shouldPullHint = kind === "tool" && options.pendingLineMode !== "replace";
   const pulledHint = shouldPullHint ? pullToolHintFromLines(headerBody) : { lines: headerBody };
 
   const innerWidth = width - 2;
   const trimmedBody = pulledHint.bottomRight ? trimTrailingBlankLines(pulledHint.lines) : pulledHint.lines;
   const bottomRight = pulledHint.bottomRight;
-  const separatorAfter = options.separatorAfter === undefined ? undefined : Math.max(1, options.separatorAfter - topTrim.removed);
+  const originalSeparatorAfter = options.separatorAfter === undefined ? undefined : Math.max(1, options.separatorAfter - topTrim.removed);
+  const separatorAfter =
+    options.headerLine && originalSeparatorAfter !== undefined
+      ? Math.max(1, originalSeparatorAfter - headerLineSpan + 1)
+      : originalSeparatorAfter;
   const pendingBody = applyPendingLine(
     trimmedBody,
     separatorAfter,

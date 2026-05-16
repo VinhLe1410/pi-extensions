@@ -1,5 +1,5 @@
 import type { Component } from "@earendil-works/pi-tui";
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { FrameKind, Renderable, ToolState } from "./types";
 import { ORIGINAL_RENDER, PATCHED } from "./symbols";
 import { renderFrame, type FrameOptions } from "../ui/frame";
@@ -28,7 +28,7 @@ function getToolState(component: Component): ToolState {
   return "pending";
 }
 
-function getBashHeader(tool: ToolExecutionLike): string | undefined {
+function getBashHeader(tool: ToolExecutionLike, renderWidth: number): string | undefined {
   if (tool.toolName !== "bash" || !tool.args || typeof tool.args !== "object") {
     return undefined;
   }
@@ -38,11 +38,10 @@ function getBashHeader(tool: ToolExecutionLike): string | undefined {
     return undefined;
   }
 
-  const highlighted = highlightBash(args.command);
-  if (!highlighted) return undefined;
-
+  const commandLine = args.command.replace(/\s+/g, " ").trim();
+  const highlighted = highlightBash(commandLine) ?? labelColor("tool", commandLine);
   const timeoutSuffix = typeof args.timeout === "number" ? labelColor("tool", ` (timeout ${args.timeout}s)`) : "";
-  return labelColor("tool", "$ ") + highlighted + timeoutSuffix;
+  return truncateToWidth(labelColor("tool", "$ ") + highlighted + timeoutSuffix, renderWidth, "...");
 }
 
 function getCallRenderWidth(tool: ToolExecutionLike, renderWidth: number): number {
@@ -79,12 +78,16 @@ function countHeaderEnd(lines: string[]): number | undefined {
   return headerLineCount > 0 ? leadingBlankCount + headerLineCount : undefined;
 }
 
+function getCallHeaderLineCount(tool: ToolExecutionLike, renderWidth: number): number | undefined {
+  return countHeaderEnd(getCallRenderedLines(tool, renderWidth));
+}
+
 function getCallSeparatorAfter(tool: ToolExecutionLike, renderWidth: number): number | undefined {
-  const headerEnd = countHeaderEnd(getCallRenderedLines(tool, renderWidth));
-  if (headerEnd === undefined) return undefined;
+  const headerLineCount = getCallHeaderLineCount(tool, renderWidth);
+  if (headerLineCount === undefined) return undefined;
 
   const shell = tool.getRenderShell?.() ?? "default";
-  return shell === "default" ? headerEnd + 1 : headerEnd;
+  return shell === "default" ? headerLineCount + 1 : headerLineCount;
 }
 
 function getFallbackSeparatorAfter(renderedLines: string[]): number | undefined {
@@ -116,13 +119,15 @@ function getToolFrameOptions(
   toolState: ToolState,
 ): FrameOptions {
   const tool = asToolExecution(component);
-  const headerLine = getBashHeader(tool);
+  const headerLine = getBashHeader(tool, renderWidth);
+  const headerLineSpan = headerLine ? getCallHeaderLineCount(tool, renderWidth) : undefined;
   const separatorAfter = getSeparatorAfter(tool, renderWidth, renderedLines);
   const pendingLine = toolState === "pending" ? getPendingLine(tool.toolName) : undefined;
   const pendingLineMode = pendingLine ? (tool.result ? "prepend" : "replace") : undefined;
 
   return {
     ...(headerLine ? { headerLine } : {}),
+    ...(headerLineSpan === undefined ? {} : { headerLineSpan }),
     ...(separatorAfter === undefined ? {} : { separatorAfter }),
     ...(pendingLine ? { pendingLine, pendingLineMode } : {}),
   };
