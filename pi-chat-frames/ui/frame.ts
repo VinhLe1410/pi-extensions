@@ -1,5 +1,6 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { FrameKind, ToolState } from "../core/types";
+import type { FrameContent } from "./frame-model";
 import {
   insertBeforeTrailingAnsi,
   OSC133_ZONE_END,
@@ -173,24 +174,121 @@ function insertSeparator(
   return [...lines.slice(0, separatorAfter), separator, ...lines.slice(separatorAfter)];
 }
 
-function applyPendingLine(
-  lines: string[],
+function adjustSeparatorAfter(
   separatorAfter: number | undefined,
-  innerWidth: number,
-  pendingLine: string | undefined,
-  mode: FrameOptions["pendingLineMode"],
-): string[] {
-  if (!pendingLine || separatorAfter === undefined || separatorAfter <= 0) return lines;
+  removedLeadingLines: number,
+  headerLine: string | undefined,
+  headerLineSpan: number,
+): number | undefined {
+  if (separatorAfter === undefined) return undefined;
 
-  const before = lines.slice(0, separatorAfter);
-  const after = lines.slice(separatorAfter);
+  const afterTrim = Math.max(1, separatorAfter - removedLeadingLines);
+  return headerLine ? Math.max(1, afterTrim - headerLineSpan + 1) : afterTrim;
+}
+
+function applyHeaderReplacement(lines: string[], options: FrameOptions): string[] {
+  if (!options.headerLine || lines.length === 0) return lines;
+
+  const headerLineSpan = Math.max(1, options.headerLineSpan ?? 1);
+  return [options.headerLine, ...lines.slice(headerLineSpan)];
+}
+
+function applyPendingLine(content: FrameContent, innerWidth: number): FrameContent {
+  const { pendingLine, pendingLineMode, separatorAfter } = content;
+  if (!pendingLine || separatorAfter === undefined || separatorAfter <= 0) return content;
+
+  const before = content.textBody.slice(0, separatorAfter);
+  const after = content.textBody.slice(separatorAfter);
   const pending = lineLike(after[0] ?? before.at(-1), innerWidth, pendingLine);
-  if (mode === "replace") return [...before, pending];
+  const textBody = pendingLineMode === "replace"
+    ? [...before, pending]
+    : after.length > 0 && stripAnsi(after[0] ?? "").trim() === ""
+      ? [...before, pending, ...after.slice(1)]
+      : [...before, pending, ...after];
 
-  if (after.length > 0 && stripAnsi(after[0] ?? "").trim() === "") {
-    return [...before, pending, ...after.slice(1)];
+  return { ...content, textBody };
+}
+
+function normalizeFrameContent(lines: string[], kind: FrameKind, options: FrameOptions): FrameContent | undefined {
+  const { leading, body } = splitLeadingBlank(lines);
+  if (body.length === 0) return undefined;
+
+  let oscStart = false;
+  let oscEnd = false;
+  const cleanBody = body.map((line) => {
+    const stripped = stripOscMarkers(line);
+    oscStart ||= stripped.start;
+    oscEnd ||= stripped.end;
+    return stripped.line;
+  });
+
+  const { textLines, imageRows } = kind === "tool"
+    ? splitTerminalImageRows(cleanBody)
+    : { textLines: cleanBody, imageRows: [] };
+  const topTrim = kind === "tool" ? trimLeadingBlankLines(textLines) : { lines: textLines, removed: 0 };
+  const headerLineSpan = Math.max(1, options.headerLineSpan ?? 1);
+  const headerBody = applyHeaderReplacement(topTrim.lines, options);
+  const shouldPullHint = kind === "tool" && options.pendingLineMode !== "replace";
+  const pulledHint = shouldPullHint ? pullToolHintFromLines(headerBody) : { lines: headerBody };
+  const textBody = pulledHint.bottomRight ? trimTrailingBlankLines(pulledHint.lines) : pulledHint.lines;
+
+  return {
+    leadingBlankLines: leading,
+    textBody,
+    terminalImageRows: imageRows,
+    oscStart,
+    oscEnd,
+    separatorAfter: adjustSeparatorAfter(
+      options.separatorAfter,
+      topTrim.removed,
+      options.headerLine,
+      headerLineSpan,
+    ),
+    ...(options.pendingLine ? { pendingLine: options.pendingLine } : {}),
+    ...(options.pendingLineMode ? { pendingLineMode: options.pendingLineMode } : {}),
+    ...(pulledHint.bottomRight ? { bottomRightHint: pulledHint.bottomRight } : {}),
+  };
+}
+
+function renderFrameContent(
+  content: FrameContent,
+  innerWidth: number,
+  kind: FrameKind,
+  toolState: ToolState,
+): string[] {
+  const framedImageRows = indentTerminalImageRows(content.terminalImageRows);
+  if (content.textBody.length === 0) {
+    return [
+      ...content.leadingBlankLines,
+      (content.oscStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
+      (content.oscEnd ? OSC133_ZONE_END + OSC133_ZONE_FINAL : "") + bottomBorder(kind, innerWidth, toolState),
+      ...framedImageRows,
+    ];
   }
-  return [...before, pending, ...after];
+
+  const pendingContent = applyPendingLine(content, innerWidth);
+  const displayBody = pendingContent.bottomRightHint
+    ? [...pendingContent.textBody, blankLineLike(pendingContent.textBody.at(-1), innerWidth)]
+    : pendingContent.textBody;
+  const styledBody = kind === "tool"
+    ? stripCommandSectionBackground(displayBody, pendingContent.separatorAfter ?? 1)
+    : displayBody;
+  const wrapped = styledBody.map(
+    (line) => frameColor(kind, "│", toolState) + padLine(line, innerWidth) + frameColor(kind, "│", toolState),
+  );
+  const separated = insertSeparator(
+    wrapped,
+    pendingContent.separatorAfter,
+    separatorLine(kind, innerWidth, toolState),
+  );
+
+  return [
+    ...pendingContent.leadingBlankLines,
+    (pendingContent.oscStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
+    ...separated,
+    (pendingContent.oscEnd ? OSC133_ZONE_END + OSC133_ZONE_FINAL : "") + bottomBorder(kind, innerWidth, toolState, pendingContent.bottomRightHint),
+    ...framedImageRows,
+  ];
 }
 
 export function renderFrame(
@@ -202,73 +300,8 @@ export function renderFrame(
 ): string[] {
   if (width < 4 || lines.length === 0) return lines;
 
-  const { leading, body } = splitLeadingBlank(lines);
-  if (body.length === 0) return lines;
+  const content = normalizeFrameContent(lines, kind, options);
+  if (!content) return lines;
 
-  let sawStart = false;
-  let sawEnd = false;
-  const cleanBody = body.map((line) => {
-    const stripped = stripOscMarkers(line);
-    sawStart ||= stripped.start;
-    sawEnd ||= stripped.end;
-    return stripped.line;
-  });
-
-  const innerWidth = width - 2;
-  const { textLines, imageRows } = kind === "tool"
-    ? splitTerminalImageRows(cleanBody)
-    : { textLines: cleanBody, imageRows: [] };
-  const framedImageRows = indentTerminalImageRows(imageRows);
-  const topTrim = kind === "tool" ? trimLeadingBlankLines(textLines) : { lines: textLines, removed: 0 };
-  if (topTrim.lines.length === 0) {
-    return [
-      ...leading,
-      (sawStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
-      (sawEnd ? OSC133_ZONE_END + OSC133_ZONE_FINAL : "") + bottomBorder(kind, innerWidth, toolState),
-      ...framedImageRows,
-    ];
-  }
-
-  const headerLineSpan = Math.max(1, options.headerLineSpan ?? 1);
-  const headerBody = options.headerLine && topTrim.lines.length > 0
-    ? [options.headerLine, ...topTrim.lines.slice(headerLineSpan)]
-    : topTrim.lines;
-  const shouldPullHint = kind === "tool" && options.pendingLineMode !== "replace";
-  const pulledHint = shouldPullHint ? pullToolHintFromLines(headerBody) : { lines: headerBody };
-
-  const trimmedBody = pulledHint.bottomRight ? trimTrailingBlankLines(pulledHint.lines) : pulledHint.lines;
-  const bottomRight = pulledHint.bottomRight;
-  const originalSeparatorAfter = options.separatorAfter === undefined ? undefined : Math.max(1, options.separatorAfter - topTrim.removed);
-  const separatorAfter =
-    options.headerLine && originalSeparatorAfter !== undefined
-      ? Math.max(1, originalSeparatorAfter - headerLineSpan + 1)
-      : originalSeparatorAfter;
-  const pendingBody = applyPendingLine(
-    trimmedBody,
-    separatorAfter,
-    innerWidth,
-    options.pendingLine,
-    options.pendingLineMode,
-  );
-  const displayBody = pulledHint.bottomRight
-    ? [...pendingBody, blankLineLike(pendingBody.at(-1), innerWidth)]
-    : pendingBody;
-  const styledBody = kind === "tool" ? stripCommandSectionBackground(displayBody, separatorAfter ?? 1) : displayBody;
-
-  const wrapped = styledBody.map(
-    (line) => frameColor(kind, "│", toolState) + padLine(line, innerWidth) + frameColor(kind, "│", toolState),
-  );
-  const separated = insertSeparator(
-    wrapped,
-    separatorAfter,
-    separatorLine(kind, innerWidth, toolState),
-  );
-
-  return [
-    ...leading,
-    (sawStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
-    ...separated,
-    (sawEnd ? OSC133_ZONE_END + OSC133_ZONE_FINAL : "") + bottomBorder(kind, innerWidth, toolState, bottomRight),
-    ...framedImageRows,
-  ];
+  return renderFrameContent(content, width - 2, kind, toolState);
 }
