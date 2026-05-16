@@ -5,11 +5,11 @@ export interface TerminalImageSplit {
   imageRows: string[];
 }
 
-export function isTerminalImageLine(line: string): boolean {
+function isTerminalImageLine(line: string): boolean {
   return line.includes("\x1b_G") || line.includes("\x1b]1337;File=");
 }
 
-export function getTerminalImagePlaceholderRowCount(line: string): number {
+function getTerminalImagePlaceholderRowCount(line: string): number {
   const match = /^\x1b\[(\d+)A/.exec(line);
   return match ? Number(match[1]) : 0;
 }

@@ -2,7 +2,9 @@ import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { FrameKind, ToolState } from "../core/types";
 import type { FrameContent } from "./frame-model";
 import {
+  blankLineWithBackgroundLike,
   insertBeforeTrailingAnsi,
+  lineWithBackgroundLike,
   OSC133_ZONE_END,
   OSC133_ZONE_FINAL,
   OSC133_ZONE_START,
@@ -55,22 +57,6 @@ function trimTrailingBlankLines(lines: string[]): string[] {
     end--;
   }
   return lines.slice(0, end);
-}
-
-function backgroundFrom(line: string | undefined): string {
-  return line?.match(/\x1b\[(?:48;5;\d+|48;2;\d+;\d+;\d+)m/)?.[0] ?? "";
-}
-
-function blankLineLike(line: string | undefined, width: number): string {
-  const background = backgroundFrom(line);
-  return `${background}${" ".repeat(width)}${background ? "\x1b[49m" : ""}`;
-}
-
-function lineLike(line: string | undefined, width: number, text: string): string {
-  const background = backgroundFrom(line);
-  const content = truncateToWidth(text, width, "");
-  const padding = " ".repeat(Math.max(0, width - visibleWidth(content)));
-  return `${background}${content}${padding}${background ? "\x1b[49m" : ""}`;
 }
 
 function topBorder(kind: FrameKind, innerWidth: number, toolState: ToolState): string {
@@ -159,7 +145,7 @@ function applyPendingLine(content: FrameContent, innerWidth: number): FrameConte
 
   const before = content.textBody.slice(0, separatorAfter);
   const after = content.textBody.slice(separatorAfter);
-  const pending = lineLike(after[0] ?? before.at(-1), innerWidth, pendingLine);
+  const pending = lineWithBackgroundLike(after[0] ?? before.at(-1), innerWidth, pendingLine);
   const textBody = pendingLineMode === "replace"
     ? [...before, pending]
     : after.length > 0 && stripAnsi(after[0] ?? "").trim() === ""
@@ -228,7 +214,7 @@ function renderFrameContent(
 
   const pendingContent = applyPendingLine(content, innerWidth);
   const displayBody = pendingContent.bottomRightHint
-    ? [...pendingContent.textBody, blankLineLike(pendingContent.textBody.at(-1), innerWidth)]
+    ? [...pendingContent.textBody, blankLineWithBackgroundLike(pendingContent.textBody.at(-1), innerWidth)]
     : pendingContent.textBody;
   const styledBody = kind === "tool"
     ? stripCommandSectionBackground(displayBody, pendingContent.separatorAfter ?? 1)

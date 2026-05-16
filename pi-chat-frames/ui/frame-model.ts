@@ -9,8 +9,3 @@ export interface FrameContent {
   pendingLineMode?: "replace" | "prepend";
   bottomRightHint?: string;
 }
-
-export interface FrameHeaderReplacement {
-  line: string;
-  span: number;
-}

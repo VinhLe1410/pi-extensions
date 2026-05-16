@@ -1,9 +1,12 @@
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+
 export const OSC133_ZONE_START = "\x1b]133;A\x07";
 export const OSC133_ZONE_END = "\x1b]133;B\x07";
 export const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
 const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
 const BACKGROUND_ANSI_PATTERN = /\x1b\[(?:49|48;5;\d+|48;2;\d+;\d+;\d+)m/g;
+const BACKGROUND_COLOR_PATTERN = /\x1b\[(?:48;5;\d+|48;2;\d+;\d+;\d+)m/;
 const TRAILING_ANSI_PATTERN = /(?:\x1b\[[0-9;]*m)+$/;
 
 export interface OscStripResult {
@@ -36,4 +39,20 @@ export function insertBeforeTrailingAnsi(line: string, text: string): string {
   const match = TRAILING_ANSI_PATTERN.exec(line);
   if (!match || match.index === undefined) return line + text;
   return line.slice(0, match.index) + text + line.slice(match.index);
+}
+
+function backgroundAnsiFrom(line: string | undefined): string {
+  return line?.match(BACKGROUND_COLOR_PATTERN)?.[0] ?? "";
+}
+
+export function blankLineWithBackgroundLike(line: string | undefined, width: number): string {
+  const background = backgroundAnsiFrom(line);
+  return `${background}${" ".repeat(width)}${background ? "\x1b[49m" : ""}`;
+}
+
+export function lineWithBackgroundLike(line: string | undefined, width: number, text: string): string {
+  const background = backgroundAnsiFrom(line);
+  const content = truncateToWidth(text, width, "");
+  const padding = " ".repeat(Math.max(0, width - visibleWidth(content)));
+  return `${background}${content}${padding}${background ? "\x1b[49m" : ""}`;
 }
