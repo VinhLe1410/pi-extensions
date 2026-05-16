@@ -14,7 +14,7 @@ import {
 } from "./ansi";
 import { pullToolHintFromLines } from "./hints";
 import { indentTerminalImageRows, splitTerminalImageRows } from "./terminal-images";
-import { frameColor, labelColor } from "./theme";
+import { dimColor, frameColor, labelColor, toolBackgroundColor } from "./theme";
 
 export interface FrameOptions {
   separatorAfter?: number;
@@ -155,7 +155,11 @@ function applyPendingLine(content: FrameContent, innerWidth: number): FrameConte
   return { ...content, textBody };
 }
 
-function applyCollapsedContentPlaceholder(content: FrameContent): FrameContent {
+function applyCollapsedContentPlaceholder(
+  content: FrameContent,
+  innerWidth: number,
+  toolState: ToolState,
+): FrameContent {
   const { bottomRightHint, separatorAfter } = content;
   if (!bottomRightHint || separatorAfter === undefined || separatorAfter <= 0) return content;
 
@@ -163,9 +167,13 @@ function applyCollapsedContentPlaceholder(content: FrameContent): FrameContent {
   const after = content.textBody.slice(separatorAfter);
   if (after.some((line) => stripAnsi(line).trim() !== "")) return content;
 
+  const paddingLine = toolBackgroundColor(" ".repeat(innerWidth), toolState);
+  const placeholderText = dimColor(" content is collapsed by default...");
+  const placeholder = toolBackgroundColor(padLine(placeholderText, innerWidth), toolState);
+
   return {
     ...content,
-    textBody: [...before, " content is collapsed by default..."],
+    textBody: [...before, paddingLine, placeholder],
   };
 }
 
@@ -227,7 +235,7 @@ function renderFrameContent(
   }
 
   const pendingContent = applyPendingLine(content, innerWidth);
-  const placeholderContent = applyCollapsedContentPlaceholder(pendingContent);
+  const placeholderContent = applyCollapsedContentPlaceholder(pendingContent, innerWidth, toolState);
   const displayBody = placeholderContent.bottomRightHint
     ? [...placeholderContent.textBody, blankLineWithBackgroundLike(placeholderContent.textBody.at(-1), innerWidth)]
     : placeholderContent.textBody;
