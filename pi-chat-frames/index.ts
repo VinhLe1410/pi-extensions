@@ -3,17 +3,23 @@ import {
   ToolExecutionComponent,
   UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
-import { patchRender } from "./core/patch";
+import { patchRender, unpatchRender } from "./core/patch";
 import { setActiveTheme } from "./core/state";
-import { warmBashHighlighter } from "./ui/shiki";
 import type { Renderable } from "./core/types";
 
 export default function chatFrames(pi: ExtensionAPI) {
-  patchRender(UserMessageComponent.prototype as Renderable, "user");
-  patchRender(ToolExecutionComponent.prototype as Renderable, "tool");
+  const userPrototype = UserMessageComponent.prototype as Renderable;
+  const toolPrototype = ToolExecutionComponent.prototype as Renderable;
+
+  patchRender(userPrototype, "user");
+  patchRender(toolPrototype, "tool");
 
   pi.on("session_start", (_event, ctx) => {
     setActiveTheme(ctx.ui.theme);
-    warmBashHighlighter();
+  });
+
+  pi.on("session_shutdown", () => {
+    unpatchRender(userPrototype);
+    unpatchRender(toolPrototype);
   });
 }

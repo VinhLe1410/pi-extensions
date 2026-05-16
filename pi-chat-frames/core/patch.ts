@@ -4,7 +4,6 @@ import type { FrameKind, Renderable, ToolState } from "./types";
 import { ORIGINAL_RENDER, PATCHED } from "./symbols";
 import { renderFrame, type FrameOptions } from "../ui/frame";
 import { dimColor, labelColor } from "../ui/theme";
-import { highlightBash } from "../ui/shiki";
 import { stripAnsi } from "../ui/ansi";
 
 interface ToolExecutionLike extends Component {
@@ -39,9 +38,8 @@ function getBashHeader(tool: ToolExecutionLike, renderWidth: number): string | u
   }
 
   const commandLine = args.command.replace(/\s+/g, " ").trim();
-  const highlighted = highlightBash(commandLine) ?? labelColor("tool", commandLine);
   const timeoutSuffix = typeof args.timeout === "number" ? labelColor("tool", ` (timeout ${args.timeout}s)`) : "";
-  return truncateToWidth(labelColor("tool", "$ ") + highlighted + timeoutSuffix, renderWidth, "...");
+  return truncateToWidth(labelColor("tool", "$ ") + labelColor("tool", commandLine) + timeoutSuffix, renderWidth, "...");
 }
 
 function getCallRenderWidth(tool: ToolExecutionLike, renderWidth: number): number {
@@ -133,14 +131,27 @@ function getToolFrameOptions(
   };
 }
 
+export function unpatchRender(prototype: Renderable): void {
+  const original = prototype[ORIGINAL_RENDER];
+  if (!prototype[PATCHED] || !original) return;
+
+  prototype.render = original;
+  delete prototype[PATCHED];
+  delete prototype[ORIGINAL_RENDER];
+}
+
 export function patchRender(prototype: Renderable, kind: FrameKind): void {
-  if (prototype[PATCHED]) return;
+  if (prototype[PATCHED]) {
+    unpatchRender(prototype);
+  }
 
   const original = prototype.render;
   prototype[PATCHED] = true;
   prototype[ORIGINAL_RENDER] = original;
 
   prototype.render = function patchedRender(this: Component, width: number): string[] {
+    if (width < 4) return original.call(this, width);
+
     const innerWidth = Math.max(1, width - 2);
     const rendered = original.call(this, innerWidth);
     const toolState = kind === "tool" ? getToolState(this) : "pending";
