@@ -20,9 +20,10 @@ It preserves Pi's existing renderers by patching their `render(width)` methods, 
 1. `index.ts` receives the Pi extension API.
 2. `core/patch.ts` patches selected Pi chat-history component render methods.
 3. The original component renderer is called with `width - 2` to leave space for frame borders.
-4. Tool-specific metadata is read through `core/tool-adapter.ts`.
-5. `ui/frame.ts` normalizes raw rendered lines into `FrameContent`, applies semantic transformations, and draws borders.
-6. `ui/theme.ts`, `ui/ansi.ts`, `ui/hints.ts`, and `ui/terminal-images.ts` provide narrow helper APIs for rendering details.
+4. `core/render-cache.ts` reuses previously framed rows when the same component renders the same content at the same width.
+5. Tool-specific metadata is read through `core/tool-adapter.ts` on cache misses.
+6. `ui/frame.ts` normalizes raw rendered lines into `FrameContent`, applies semantic transformations, and draws borders.
+7. `ui/theme.ts`, `ui/ansi.ts`, `ui/hints.ts`, and `ui/terminal-images.ts` provide narrow helper APIs for rendering details.
 
 ## File guide
 
@@ -41,8 +42,14 @@ It preserves Pi's existing renderers by patching their `render(width)` methods, 
 
 - `core/patch.ts`
   - Orchestrates render patching for each frame kind.
-  - Calls the original renderer, asks the tool adapter for frame options when needed, then delegates to `renderFrame()`.
+  - Calls the original renderer, checks the frame cache, asks the tool adapter for frame options on cache misses, then delegates to `renderFrame()`.
   - Should stay free of private Pi tool-component field reads.
+
+- `core/render-cache.ts`
+  - Owns bounded cached framed rows for repeated same-width renders.
+  - Uses `WeakMap<Component, CacheEntry>` so entries can be garbage-collected with component instances.
+  - Keys cached rows by width, frame kind, tool state, exact original rendered rows, and bash command/timeout when relevant.
+  - Bypasses unsafe or oversized rows such as terminal image output and large rendered content.
 
 - `core/patch-manager.ts`
   - Owns prototype patch/unpatch lifecycle mechanics.
@@ -100,6 +107,7 @@ It preserves Pi's existing renderers by patching their `render(width)` methods, 
 
 - Preserve rendering behavior unless a change is explicitly intentional.
 - Keep prototype patching mechanics in `core/patch-manager.ts`.
+- Keep frame cache keying and size limits in `core/render-cache.ts`.
 - Keep private Pi component introspection in `core/tool-adapter.ts`.
 - Keep border drawing in `ui/frame.ts`.
 - New non-tool components should normally behave like user frames; only `tool` should use tool-specific header, separator, pending-line, hint, and terminal-image behavior.
@@ -116,6 +124,12 @@ After code changes, run:
 
 ```sh
 pnpm --filter pi-chat-frames exec tsc --noEmit --pretty false
+```
+
+For rendering-sensitive changes, also run:
+
+```sh
+pnpm test
 ```
 
 For rendering-sensitive changes, also reload Pi and manually check:

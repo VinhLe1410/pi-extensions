@@ -8,7 +8,9 @@ import {
   ToolExecutionComponent,
   UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
+import { clearDebugWidget, registerDebugWidget } from "./core/debug";
 import { patchRender } from "./core/patch";
+import { clearFrameRenderCache } from "./core/render-cache";
 import { unpatchRender } from "./core/patch-manager";
 import { setActiveTheme } from "./core/state";
 import type { Renderable } from "./core/types";
@@ -31,10 +33,14 @@ export default function chatFrames(pi: ExtensionAPI) {
   patchRender(branchPrototype, "branch");
 
   pi.on("session_start", (_event, ctx) => {
+    clearFrameRenderCache();
     setActiveTheme(ctx.ui.theme);
+    registerDebugWidget(ctx);
   });
 
   pi.on("session_shutdown", () => {
+    clearFrameRenderCache();
+    clearDebugWidget();
     unpatchRender(userPrototype);
     unpatchRender(toolPrototype);
     unpatchRender(skillPrototype);

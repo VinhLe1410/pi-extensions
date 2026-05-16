@@ -125,13 +125,20 @@ function getRenderedCallHeaderLine(
   return collapsedHeader === undefined ? undefined : truncateHeaderLine(collapsedHeader, renderWidth, true);
 }
 
-function getCallHeaderInfo(tool: ToolExecutionLike, renderWidth: number): ToolHeaderInfo | undefined {
-  const callRenderWidth = getCallRenderWidth(tool, renderWidth);
-  const renderedCallLines = tool.callRendererComponent?.render(callRenderWidth) ?? [];
-  const headerEnd = countHeaderEnd(renderedCallLines);
+function getCallHeaderInfo(
+  tool: ToolExecutionLike,
+  renderWidth: number,
+  renderedLines: string[],
+): ToolHeaderInfo | undefined {
   const bashHeader = getBashHeader(tool, renderWidth);
+  if (bashHeader) return { line: bashHeader, span: getFallbackSeparatorAfter(renderedLines) ?? 1 };
 
-  if (bashHeader) return { line: bashHeader, span: headerEnd ?? 1 };
+  const shell = tool.getRenderShell?.() ?? "default";
+  const callRenderWidth = shell === "self" ? renderWidth : getCallRenderWidth(tool, renderWidth);
+  const renderedCallLines = shell === "self"
+    ? renderedLines.slice(countLeadingBlankLines(renderedLines))
+    : tool.callRendererComponent?.render(callRenderWidth) ?? [];
+  const headerEnd = countHeaderEnd(renderedCallLines);
   if (headerEnd === undefined) return undefined;
 
   const headerLine = getRenderedCallHeaderLine(renderedCallLines, renderWidth, callRenderWidth, headerEnd);
@@ -164,7 +171,7 @@ export function getToolFrameOptions(
   toolState: ToolState,
 ): FrameOptions {
   const tool = asToolExecution(component);
-  const headerInfo = getCallHeaderInfo(tool, renderWidth);
+  const headerInfo = getCallHeaderInfo(tool, renderWidth, renderedLines);
   const separatorAfter = headerInfo
     ? getCallSeparatorAfter(tool, headerInfo.span)
     : getFallbackSeparatorAfter(renderedLines);
