@@ -5,6 +5,7 @@ packages:
   - zsh-user-bash
   - pi-tps-tracker
   - pi-whimsical
+  - pi-chat-frames
 allowBuilds:
   '@google/genai': true
   koffi: true

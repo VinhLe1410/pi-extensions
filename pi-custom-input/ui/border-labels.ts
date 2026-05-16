@@ -6,11 +6,17 @@ import {
 import type { BorderLabels } from "./editor";
 import type { GitCache, RateWindow, UsageSnapshot } from "../core/types";
 import type { UsageState } from "../seams/usage-state";
-import { contextColor, percentColor, RESET_ICON, separator, thinkingColor } from "./theme";
+import {
+  contextColor,
+  percentColor,
+  RESET_ICON,
+  separator,
+  thinkingColor,
+} from "./theme";
 
 function renderThinking(theme: Theme, thinkingLevel: string): string {
   const label = thinkingLevel === "off" ? "no-thinking" : thinkingLevel;
-  return theme.fg(thinkingColor(thinkingLevel), label);
+  return theme.fg(thinkingColor(thinkingLevel), `󰌶 ${label}`);
 }
 
 function renderUsageWindow(theme: Theme, window: RateWindow): string {
@@ -42,7 +48,7 @@ function renderBranch(theme: Theme, git: GitCache): string | null {
 
   const color = git.dirty ? "warning" : "success";
   let text = theme.fg(color, ` ${git.branch}`);
-  if (git.dirty) text += theme.fg("warning", "*");
+  if (git.dirty) text += theme.fg("warning", " *");
   if (git.ahead) text += theme.fg("success", ` ↑${git.ahead}`);
   if (git.behind) text += theme.fg("error", ` ↓${git.behind}`);
   return text;
@@ -56,7 +62,11 @@ function getThinkingLevel(ctx: ExtensionContext): string {
   return buildSessionContext(entries, leafId).thinkingLevel || "off";
 }
 
-function getContextInfo(ctx: ExtensionContext): { percentage: number; used: number; total: number } {
+function getContextInfo(ctx: ExtensionContext): {
+  percentage: number;
+  used: number;
+  total: number;
+} {
   const usage = ctx.getContextUsage();
   const total = usage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
   const used = usage?.tokens ?? 0;
@@ -67,7 +77,9 @@ function getContextInfo(ctx: ExtensionContext): { percentage: number; used: numb
 function renderContextWindow(ctx: ExtensionContext, theme: Theme): string {
   const { percentage, used, total } = getContextInfo(ctx);
   const value = total > 0 ? `${used}/${total}` : "?";
-  return theme.fg("dim", "context: ") + theme.fg(contextColor(percentage), value);
+  return (
+    theme.fg("dim", "context: ") + theme.fg(contextColor(percentage), value)
+  );
 }
 
 export function buildBorderLabels(
@@ -75,17 +87,25 @@ export function buildBorderLabels(
   theme: Theme,
   git: GitCache,
   usageState: UsageState,
+  fastModeEnabled: boolean,
 ): BorderLabels {
   const modelName = ctx.model?.name ?? null;
   const topLeft = modelName
-    ? [theme.fg("accent", ` ${modelName}`), renderThinking(theme, getThinkingLevel(ctx))].join(separator(theme))
+    ? [
+        theme.fg("accent", ` ${modelName}`),
+        renderThinking(theme, getThinkingLevel(ctx)),
+        ...(fastModeEnabled ? [theme.fg("success", `󱐋 fast`)] : []),
+      ].join(separator(theme))
     : null;
 
   const usageLine = usageWindows(usageState.current())
     .map((window) => renderUsageWindow(theme, window))
     .join(separator(theme));
 
-  const cwd = theme.fg("accent", compactPath(ctx.cwd, process.env.HOME || process.env.USERPROFILE));
+  const cwd = theme.fg(
+    "accent",
+    compactPath(ctx.cwd, process.env.HOME || process.env.USERPROFILE),
+  );
   const branch = renderBranch(theme, git);
 
   return {

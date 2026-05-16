@@ -24,6 +24,8 @@ importers:
         specifier: ^5.0.0
         version: 5.9.3
 
+  pi-chat-frames: {}
+
   pi-codex-fast: {}
 
   pi-custom-input: {}
