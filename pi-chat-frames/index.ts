@@ -5,6 +5,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { patchRender } from "./core/patch";
 import { setActiveTheme } from "./core/state";
+import { warmBashHighlighter } from "./ui/shiki";
 import type { Renderable } from "./core/types";
 
 export default function chatFrames(pi: ExtensionAPI) {
@@ -13,5 +14,6 @@ export default function chatFrames(pi: ExtensionAPI) {
 
   pi.on("session_start", (_event, ctx) => {
     setActiveTheme(ctx.ui.theme);
+    warmBashHighlighter();
   });
 }

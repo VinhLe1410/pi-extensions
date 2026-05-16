@@ -1,5 +1,8 @@
 {
   "name": "pi-chat-frames",
   "private": true,
-  "description": "Framed rendering for Pi user messages and tool usage"
+  "description": "Framed rendering for Pi user messages and tool usage",
+  "dependencies": {
+    "shiki": "^4.0.2"
+  }
 }

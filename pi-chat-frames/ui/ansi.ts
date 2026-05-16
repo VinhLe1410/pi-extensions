@@ -3,6 +3,7 @@ export const OSC133_ZONE_END = "\x1b]133;B\x07";
 export const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
 const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
+const BACKGROUND_ANSI_PATTERN = /\x1b\[(?:49|48;5;\d+|48;2;\d+;\d+;\d+)m/g;
 const TRAILING_ANSI_PATTERN = /(?:\x1b\[[0-9;]*m)+$/;
 
 export interface OscStripResult {
@@ -24,6 +25,10 @@ export function stripOscMarkers(line: string): OscStripResult {
 
 export function stripAnsi(line: string): string {
   return line.replace(ANSI_PATTERN, "");
+}
+
+export function stripBackgroundAnsi(line: string): string {
+  return line.replace(BACKGROUND_ANSI_PATTERN, "");
 }
 
 export function insertBeforeTrailingAnsi(line: string, text: string): string {

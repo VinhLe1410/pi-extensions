@@ -1,10 +1,15 @@
 import type { Component } from "@earendil-works/pi-tui";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import type { FrameKind, Renderable, ToolState } from "./types";
 import { ORIGINAL_RENDER, PATCHED } from "./symbols";
 import { renderFrame, type FrameOptions } from "../ui/frame";
+import { dimColor, labelColor } from "../ui/theme";
+import { highlightBash } from "../ui/shiki";
+import { stripAnsi } from "../ui/ansi";
 
 interface ToolExecutionLike extends Component {
   toolName?: string;
+  args?: unknown;
   isPartial?: boolean;
   result?: { isError?: boolean };
   callRendererComponent?: Component;
@@ -23,26 +28,104 @@ function getToolState(component: Component): ToolState {
   return "pending";
 }
 
-function getToolFrameOptions(component: Component, renderWidth: number): FrameOptions {
-  const tool = asToolExecution(component);
-  if (!tool.result || !tool.callRendererComponent) {
-    return {};
+function getBashHeader(tool: ToolExecutionLike): string | undefined {
+  if (tool.toolName !== "bash" || !tool.args || typeof tool.args !== "object") {
+    return undefined;
   }
 
-  if (tool.toolName === "edit" || tool.toolName === "write") {
-    return { separatorAfter: 2 };
+  const args = tool.args as { command?: unknown; timeout?: unknown };
+  if (typeof args.command !== "string" || args.command.length === 0) {
+    return undefined;
   }
 
-  if (!tool.resultRendererComponent) {
-    return {};
+  const highlighted = highlightBash(args.command);
+  if (!highlighted) return undefined;
+
+  const timeoutSuffix = typeof args.timeout === "number" ? labelColor("tool", ` (timeout ${args.timeout}s)`) : "";
+  return labelColor("tool", "$ ") + highlighted + timeoutSuffix;
+}
+
+function getCallRenderWidth(tool: ToolExecutionLike, renderWidth: number): number {
+  const shell = tool.getRenderShell?.() ?? "default";
+  return shell === "default" ? Math.max(1, renderWidth - 2) : renderWidth;
+}
+
+function getCallRenderedLines(tool: ToolExecutionLike, renderWidth: number): string[] {
+  if (!tool.callRendererComponent) return [];
+  return tool.callRendererComponent.render(getCallRenderWidth(tool, renderWidth));
+}
+
+function isBlankLine(line: string): boolean {
+  return stripAnsi(line).trim() === "";
+}
+
+function countLeadingBlankLines(lines: string[]): number {
+  let count = 0;
+  while (count < lines.length && isBlankLine(lines[count] ?? "")) {
+    count++;
   }
+  return count;
+}
+
+function countHeaderEnd(lines: string[]): number | undefined {
+  const leadingBlankCount = countLeadingBlankLines(lines);
+  let headerLineCount = 0;
+  while (
+    leadingBlankCount + headerLineCount < lines.length &&
+    !isBlankLine(lines[leadingBlankCount + headerLineCount] ?? "")
+  ) {
+    headerLineCount++;
+  }
+  return headerLineCount > 0 ? leadingBlankCount + headerLineCount : undefined;
+}
+
+function getCallSeparatorAfter(tool: ToolExecutionLike, renderWidth: number): number | undefined {
+  const headerEnd = countHeaderEnd(getCallRenderedLines(tool, renderWidth));
+  if (headerEnd === undefined) return undefined;
 
   const shell = tool.getRenderShell?.() ?? "default";
-  const callWidth = shell === "default" ? Math.max(1, renderWidth - 2) : renderWidth;
-  const callLineCount = tool.callRendererComponent.render(callWidth).length;
-  if (callLineCount === 0) return {};
+  return shell === "default" ? headerEnd + 1 : headerEnd;
+}
 
-  return { separatorAfter: shell === "default" ? callLineCount + 1 : callLineCount };
+function getFallbackSeparatorAfter(renderedLines: string[]): number | undefined {
+  const bodyStart = renderedLines.findIndex((line) => visibleWidth(line) > 0);
+  if (bodyStart === -1) return undefined;
+  return countHeaderEnd(renderedLines.slice(bodyStart));
+}
+
+function getSeparatorAfter(
+  tool: ToolExecutionLike,
+  renderWidth: number,
+  renderedLines: string[],
+): number | undefined {
+  return getCallSeparatorAfter(tool, renderWidth) ?? getFallbackSeparatorAfter(renderedLines);
+}
+
+function getPendingLine(toolName: string | undefined): string {
+  if (toolName === "read") return dimColor(" reading...");
+  if (toolName === "write") return dimColor(" writing...");
+  if (toolName === "edit") return dimColor(" editing...");
+  if (toolName === "bash") return dimColor(" executing...");
+  return dimColor(" running...");
+}
+
+function getToolFrameOptions(
+  component: Component,
+  renderWidth: number,
+  renderedLines: string[],
+  toolState: ToolState,
+): FrameOptions {
+  const tool = asToolExecution(component);
+  const headerLine = getBashHeader(tool);
+  const separatorAfter = getSeparatorAfter(tool, renderWidth, renderedLines);
+  const pendingLine = toolState === "pending" ? getPendingLine(tool.toolName) : undefined;
+  const pendingLineMode = pendingLine ? (tool.result ? "prepend" : "replace") : undefined;
+
+  return {
+    ...(headerLine ? { headerLine } : {}),
+    ...(separatorAfter === undefined ? {} : { separatorAfter }),
+    ...(pendingLine ? { pendingLine, pendingLineMode } : {}),
+  };
 }
 
 export function patchRender(prototype: Renderable, kind: FrameKind): void {
@@ -56,7 +139,7 @@ export function patchRender(prototype: Renderable, kind: FrameKind): void {
     const innerWidth = Math.max(1, width - 2);
     const rendered = original.call(this, innerWidth);
     const toolState = kind === "tool" ? getToolState(this) : "pending";
-    const options = kind === "tool" ? getToolFrameOptions(this, innerWidth) : {};
+    const options = kind === "tool" ? getToolFrameOptions(this, innerWidth, rendered, toolState) : {};
     return renderFrame(rendered, width, kind, toolState, options);
   };
 }

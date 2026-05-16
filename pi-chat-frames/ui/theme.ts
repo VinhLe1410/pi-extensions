@@ -27,3 +27,9 @@ export function labelColor(kind: FrameKind, text = kind === "user" ? " user " : 
   if (!theme) return text;
   return theme.fg(kind === "user" ? "accent" : "toolTitle", text);
 }
+
+export function dimColor(text: string): string {
+  const theme = getActiveTheme();
+  if (!theme) return `\x1b[2m${text}\x1b[22m`;
+  return theme.fg("dim", text);
+}

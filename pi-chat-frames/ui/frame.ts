@@ -6,6 +6,7 @@ import {
   OSC133_ZONE_FINAL,
   OSC133_ZONE_START,
   stripAnsi,
+  stripBackgroundAnsi,
   stripOscMarkers,
 } from "./ansi";
 import { pullToolHintFromLines } from "./hints";
@@ -13,6 +14,9 @@ import { frameColor, labelColor } from "./theme";
 
 export interface FrameOptions {
   separatorAfter?: number;
+  headerLine?: string;
+  pendingLine?: string;
+  pendingLineMode?: "replace" | "prepend";
 }
 
 function splitLeadingBlank(lines: string[]): {
@@ -50,9 +54,20 @@ function trimTrailingBlankLines(lines: string[]): string[] {
   return lines.slice(0, end);
 }
 
+function backgroundFrom(line: string | undefined): string {
+  return line?.match(/\x1b\[(?:48;5;\d+|48;2;\d+;\d+;\d+)m/)?.[0] ?? "";
+}
+
 function blankLineLike(line: string | undefined, width: number): string {
-  const background = line?.match(/\x1b\[(?:48;5;\d+|48;2;\d+;\d+;\d+)m/)?.[0] ?? "";
+  const background = backgroundFrom(line);
   return `${background}${" ".repeat(width)}${background ? "\x1b[49m" : ""}`;
+}
+
+function lineLike(line: string | undefined, width: number, text: string): string {
+  const background = backgroundFrom(line);
+  const content = truncateToWidth(text, width, "");
+  const padding = " ".repeat(Math.max(0, width - visibleWidth(content)));
+  return `${background}${content}${padding}${background ? "\x1b[49m" : ""}`;
 }
 
 function topBorder(kind: FrameKind, innerWidth: number, toolState: ToolState): string {
@@ -100,6 +115,11 @@ function bottomBorder(
   );
 }
 
+function stripCommandSectionBackground(lines: string[], commandLineCount: number | undefined): string[] {
+  if (commandLineCount === undefined || commandLineCount <= 0) return lines;
+  return lines.map((line, index) => (index < commandLineCount ? stripBackgroundAnsi(line) : line));
+}
+
 function insertSeparator(
   lines: string[],
   separatorAfter: number | undefined,
@@ -109,6 +129,26 @@ function insertSeparator(
     return lines;
   }
   return [...lines.slice(0, separatorAfter), separator, ...lines.slice(separatorAfter)];
+}
+
+function applyPendingLine(
+  lines: string[],
+  separatorAfter: number | undefined,
+  innerWidth: number,
+  pendingLine: string | undefined,
+  mode: FrameOptions["pendingLineMode"],
+): string[] {
+  if (!pendingLine || separatorAfter === undefined || separatorAfter <= 0) return lines;
+
+  const before = lines.slice(0, separatorAfter);
+  const after = lines.slice(separatorAfter);
+  const pending = lineLike(after[0] ?? before.at(-1), innerWidth, pendingLine);
+  if (mode === "replace") return [...before, pending];
+
+  if (after.length > 0 && stripAnsi(after[0] ?? "").trim() === "") {
+    return [...before, pending, ...after.slice(1)];
+  }
+  return [...before, pending, ...after];
 }
 
 export function renderFrame(
@@ -133,21 +173,32 @@ export function renderFrame(
   });
 
   const topTrim = kind === "tool" ? trimLeadingBlankLines(cleanBody) : { lines: cleanBody, removed: 0 };
-  const pulledHint = kind === "tool" ? pullToolHintFromLines(topTrim.lines) : { lines: topTrim.lines };
+  const headerBody = options.headerLine && topTrim.lines.length > 0 ? [options.headerLine, ...topTrim.lines.slice(1)] : topTrim.lines;
+  const shouldPullHint = kind === "tool" && options.pendingLineMode !== "replace";
+  const pulledHint = shouldPullHint ? pullToolHintFromLines(headerBody) : { lines: headerBody };
 
   const innerWidth = width - 2;
   const trimmedBody = pulledHint.bottomRight ? trimTrailingBlankLines(pulledHint.lines) : pulledHint.lines;
-  const displayBody = pulledHint.bottomRight
-    ? [...trimmedBody, blankLineLike(trimmedBody.at(-1), innerWidth)]
-    : trimmedBody;
   const bottomRight = pulledHint.bottomRight;
+  const separatorAfter = options.separatorAfter === undefined ? undefined : Math.max(1, options.separatorAfter - topTrim.removed);
+  const pendingBody = applyPendingLine(
+    trimmedBody,
+    separatorAfter,
+    innerWidth,
+    options.pendingLine,
+    options.pendingLineMode,
+  );
+  const displayBody = pulledHint.bottomRight
+    ? [...pendingBody, blankLineLike(pendingBody.at(-1), innerWidth)]
+    : pendingBody;
+  const styledBody = kind === "tool" ? stripCommandSectionBackground(displayBody, separatorAfter ?? 1) : displayBody;
 
-  const wrapped = displayBody.map(
+  const wrapped = styledBody.map(
     (line) => frameColor(kind, "│", toolState) + padLine(line, innerWidth) + frameColor(kind, "│", toolState),
   );
   const separated = insertSeparator(
     wrapped,
-    options.separatorAfter === undefined ? undefined : Math.max(1, options.separatorAfter - topTrim.removed),
+    separatorAfter,
     separatorLine(kind, innerWidth, toolState),
   );
 
