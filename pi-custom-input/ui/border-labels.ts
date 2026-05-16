@@ -54,7 +54,7 @@ function renderBranch(theme: Theme, git: GitCache): string | null {
   return text;
 }
 
-function getThinkingLevel(ctx: ExtensionContext): string {
+export function getThinkingLevel(ctx: ExtensionContext): string {
   if (!ctx.model?.reasoning) return "off";
 
   const entries = ctx.sessionManager.getEntries();

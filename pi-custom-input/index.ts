@@ -14,9 +14,10 @@ import { createFetcherRegistry } from "./fetchers";
 import { createAuthResolver } from "./seams/auth";
 import { createGitState } from "./seams/git";
 import { createUsageState } from "./seams/usage-state";
-import { buildBorderLabels } from "./ui/border-labels";
+import { buildBorderLabels, getThinkingLevel } from "./ui/border-labels";
 import { RoundedInputEditor } from "./ui/editor";
 import { renderExtensionStatusFooter } from "./ui/status-footer";
+import { thinkingBackgroundAnsi } from "./ui/theme";
 
 interface CodexFastState {
   enabled?: boolean;
@@ -75,7 +76,7 @@ export default function (pi: ExtensionAPI) {
       return new RoundedInputEditor(tui, theme, keybindings, () => {
         refreshGitIfStale();
         return buildBorderLabels(ctx, ctx.ui.theme, git.current(), usage, fastModeEnabled);
-      }, ctx.ui.theme);
+      }, ctx.ui.theme, () => thinkingBackgroundAnsi(ctx.ui.theme, getThinkingLevel(ctx)));
     });
 
     ctx.ui.setFooter((_tui: TUI, theme: Theme, footerData: ReadonlyFooterDataProvider) => ({

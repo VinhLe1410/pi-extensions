@@ -25,9 +25,21 @@ function isHorizontalBorder(line: string): boolean {
   return plain.length > 0 && /^[─ ↑↓0-9more]+$/.test(plain) && plain.includes("─");
 }
 
+function reapplyBackgroundAfterReset(text: string, backgroundAnsi: string): string {
+  return text
+    .replace(/\x1b\[(?:0)?m/g, (reset) => `${reset}${backgroundAnsi}`)
+    .replace(/\x1b\[49m/g, (reset) => `${reset}${backgroundAnsi}`);
+}
+
+function applyLineBackground(text: string, backgroundAnsi: string | null): string {
+  if (!backgroundAnsi) return text;
+  return `${backgroundAnsi}${reapplyBackgroundAfterReset(text, backgroundAnsi)}\x1b[49m`;
+}
+
 export class RoundedInputEditor extends CustomEditor {
   private getLabels: () => BorderLabels;
   private labelTheme: Theme;
+  private getBackgroundAnsi: () => string | null;
 
   constructor(
     tui: TUI,
@@ -35,10 +47,12 @@ export class RoundedInputEditor extends CustomEditor {
     keybindings: KeybindingsManager,
     getLabels: () => BorderLabels,
     labelTheme: Theme,
+    getBackgroundAnsi: () => string | null,
   ) {
     super(tui, theme, keybindings);
     this.getLabels = getLabels;
     this.labelTheme = labelTheme;
+    this.getBackgroundAnsi = getBackgroundAnsi;
   }
 
   render(width: number): string[] {
@@ -53,19 +67,27 @@ export class RoundedInputEditor extends CustomEditor {
     const bodyLines = lines.slice(1, bodyEnd);
     const suggestionLines = bottomIndex === -1 ? [] : lines.slice(bottomIndex + 1);
 
+    const backgroundAnsi = this.getBackgroundAnsi();
     const wrapLine = (line: string): string => {
       const paddedLine = leftPadding + line;
       const content = padRight(truncateToWidth(paddedLine, innerWidth, ""), innerWidth);
-      return this.borderColor("│") + content + this.borderColor("│");
+      return this.borderColor("│") + applyLineBackground(content, backgroundAnsi) + this.borderColor("│");
     };
 
     const labels = this.getLabels();
 
     return [
       this.renderBorder("top", innerWidth, labels.topLeft, labels.topRight),
+      wrapLine(""),
       ...bodyLines.map(wrapLine),
+      wrapLine(""),
       ...(suggestionLines.length > 0
-        ? [this.renderSectionSeparator(innerWidth, "auto-suggestions"), ...suggestionLines.map(wrapLine)]
+        ? [
+            this.renderSectionSeparator(innerWidth, "auto-suggestions"),
+            wrapLine(""),
+            ...suggestionLines.map(wrapLine),
+            wrapLine(""),
+          ]
         : []),
       this.renderBorder("bottom", innerWidth, labels.bottomLeft, labels.bottomRight),
     ];
