@@ -155,6 +155,20 @@ function applyPendingLine(content: FrameContent, innerWidth: number): FrameConte
   return { ...content, textBody };
 }
 
+function applyCollapsedContentPlaceholder(content: FrameContent): FrameContent {
+  const { bottomRightHint, separatorAfter } = content;
+  if (!bottomRightHint || separatorAfter === undefined || separatorAfter <= 0) return content;
+
+  const before = content.textBody.slice(0, separatorAfter);
+  const after = content.textBody.slice(separatorAfter);
+  if (after.some((line) => stripAnsi(line).trim() !== "")) return content;
+
+  return {
+    ...content,
+    textBody: [...before, " content is collapsed by default..."],
+  };
+}
+
 function normalizeFrameContent(lines: string[], kind: FrameKind, options: FrameOptions): FrameContent | undefined {
   const { leading, body } = splitLeadingBlank(lines);
   if (body.length === 0) return undefined;
@@ -213,26 +227,27 @@ function renderFrameContent(
   }
 
   const pendingContent = applyPendingLine(content, innerWidth);
-  const displayBody = pendingContent.bottomRightHint
-    ? [...pendingContent.textBody, blankLineWithBackgroundLike(pendingContent.textBody.at(-1), innerWidth)]
-    : pendingContent.textBody;
+  const placeholderContent = applyCollapsedContentPlaceholder(pendingContent);
+  const displayBody = placeholderContent.bottomRightHint
+    ? [...placeholderContent.textBody, blankLineWithBackgroundLike(placeholderContent.textBody.at(-1), innerWidth)]
+    : placeholderContent.textBody;
   const styledBody = kind === "tool"
-    ? stripCommandSectionBackground(displayBody, pendingContent.separatorAfter ?? 1)
+    ? stripCommandSectionBackground(displayBody, placeholderContent.separatorAfter ?? 1)
     : displayBody;
   const wrapped = styledBody.map(
     (line) => frameColor(kind, "│", toolState) + padLine(line, innerWidth) + frameColor(kind, "│", toolState),
   );
   const separated = insertSeparator(
     wrapped,
-    pendingContent.separatorAfter,
+    placeholderContent.separatorAfter,
     separatorLine(kind, innerWidth, toolState),
   );
 
   return [
-    ...pendingContent.leadingBlankLines,
-    (pendingContent.oscStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
+    ...placeholderContent.leadingBlankLines,
+    (placeholderContent.oscStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
     ...separated,
-    (pendingContent.oscEnd ? OSC133_ZONE_END + OSC133_ZONE_FINAL : "") + bottomBorder(kind, innerWidth, toolState, pendingContent.bottomRightHint),
+    (placeholderContent.oscEnd ? OSC133_ZONE_END + OSC133_ZONE_FINAL : "") + bottomBorder(kind, innerWidth, toolState, placeholderContent.bottomRightHint),
     ...framedImageRows,
   ];
 }

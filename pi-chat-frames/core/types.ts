@@ -2,7 +2,7 @@ import type { Component } from "@earendil-works/pi-tui";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { PATCHED, ORIGINAL_RENDER } from "./symbols";
 
-export type FrameKind = "user" | "tool" | "skill";
+export type FrameKind = "user" | "tool" | "skill" | "custom" | "bash" | "compaction" | "branch";
 export type ToolState = "pending" | "success" | "error";
 
 export interface ChatFramesState {

@@ -1,23 +1,24 @@
 # pi-chat-frames
 
-`pi-chat-frames` is a Pi extension that wraps user messages, skill invocations, and tool executions in colored terminal frames.
+`pi-chat-frames` is a Pi extension that wraps Pi chat-history blocks in colored terminal frames.
 
 It preserves Pi's existing renderers by patching their `render(width)` methods, calling the original renderer at a reduced width, then post-processing the returned terminal lines into framed output.
 
 ## What it does
 
-- Adds ASCII/Unicode borders around user messages, skill invocations, and tool executions.
+- Adds ASCII/Unicode borders around user messages, skill invocations, custom messages, user bash executions, compaction summaries, branch summaries, and tool executions.
 - Uses different border colors for pending, successful, and failed tool executions.
 - Collapses tool call headers, especially bash commands, into one physical terminal line.
 - Inserts a command/output separator for tool calls.
 - Moves expand/collapse hints into the bottom-right border.
 - Preserves pending tool placeholders such as `executing...`, `reading...`, and `editing...`.
 - Keeps terminal image escape output outside the frame so image rendering is not broken.
+- User bash executions keep Pi's built-in bash border; this extension adds an outer chat frame around that block.
 
 ## Runtime flow
 
 1. `index.ts` receives the Pi extension API.
-2. `core/patch.ts` patches Pi's `UserMessageComponent`, `SkillInvocationMessageComponent`, and `ToolExecutionComponent` render methods.
+2. `core/patch.ts` patches selected Pi chat-history component render methods.
 3. The original component renderer is called with `width - 2` to leave space for frame borders.
 4. Tool-specific metadata is read through `core/tool-adapter.ts`.
 5. `ui/frame.ts` normalizes raw rendered lines into `FrameContent`, applies semantic transformations, and draws borders.
@@ -29,7 +30,7 @@ It preserves Pi's existing renderers by patching their `render(width)` methods, 
 
 - `index.ts`
   - Extension entry point.
-  - Patches Pi user-message, skill-invocation, and tool-execution component prototypes when the extension loads.
+  - Patches Pi chat-history component prototypes when the extension loads.
   - Stores the active Pi theme on `session_start`.
   - Restores original render methods on `session_shutdown`.
 
@@ -39,7 +40,7 @@ It preserves Pi's existing renderers by patching their `render(width)` methods, 
 ### `core/`
 
 - `core/patch.ts`
-  - Orchestrates render patching for each frame kind: `user`, `skill`, or `tool`.
+  - Orchestrates render patching for each frame kind.
   - Calls the original renderer, asks the tool adapter for frame options when needed, then delegates to `renderFrame()`.
   - Should stay free of private Pi tool-component field reads.
 
@@ -101,6 +102,7 @@ It preserves Pi's existing renderers by patching their `render(width)` methods, 
 - Keep prototype patching mechanics in `core/patch-manager.ts`.
 - Keep private Pi component introspection in `core/tool-adapter.ts`.
 - Keep border drawing in `ui/frame.ts`.
+- New non-tool components should normally behave like user frames; only `tool` should use tool-specific header, separator, pending-line, hint, and terminal-image behavior.
 - Keep ANSI/OSC manipulation in `ui/ansi.ts`.
 - Keep terminal image handling in `ui/terminal-images.ts`.
 - Keep hint extraction in `ui/hints.ts`.
@@ -120,6 +122,7 @@ For rendering-sensitive changes, also reload Pi and manually check:
 
 - user message frame rendering
 - skill invocation frame rendering
+- custom message, user bash, compaction summary, and branch summary frame rendering
 - bash command header on one physical terminal line
 - command/output separator placement
 - pending tool placeholder text

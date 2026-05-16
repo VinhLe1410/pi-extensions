@@ -11,25 +11,32 @@ function toolBorderToken(toolState: ToolState): "borderMuted" | "success" | "err
 function fallbackAnsi(kind: FrameKind, toolState: ToolState): string {
   if (kind === "tool" && toolState === "success") return "32";
   if (kind === "tool" && toolState === "error") return "31";
+  if (kind === "bash") return "36";
   return "90";
 }
 
 function frameColorToken(kind: FrameKind, toolState: ToolState): ThemeColor {
   if (kind === "user") return "accent";
-  if (kind === "skill") return "customMessageLabel";
-  return toolBorderToken(toolState);
+  if (kind === "tool") return toolBorderToken(toolState);
+  if (kind === "bash") return "bashMode";
+  return "customMessageLabel";
 }
 
 function frameLabel(kind: FrameKind): string {
   if (kind === "user") return " user ";
+  if (kind === "tool") return " tool ";
   if (kind === "skill") return " skill ";
-  return " tool ";
+  if (kind === "custom") return " custom ";
+  if (kind === "bash") return " bash ";
+  if (kind === "compaction") return " compaction ";
+  return " branch ";
 }
 
 function labelColorToken(kind: FrameKind): ThemeColor {
   if (kind === "user") return "accent";
-  if (kind === "skill") return "customMessageLabel";
-  return "toolTitle";
+  if (kind === "tool") return "toolTitle";
+  if (kind === "bash") return "bashMode";
+  return "customMessageLabel";
 }
 
 export function frameColor(kind: FrameKind, text: string, toolState: ToolState = "pending"): string {
