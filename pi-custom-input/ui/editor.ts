@@ -2,15 +2,14 @@ import { CustomEditor } from "@earendil-works/pi-coding-agent";
 import type { KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import {
+  renderBorderLine,
+  type BorderLabels,
+  type BorderLine,
+} from "./border-layout";
+import { separator } from "./theme";
 
 const INPUT_PADDING_LEFT = 1;
-
-export interface BorderLabels {
-  topLeft: string | null;
-  topRight: string | null;
-  bottomLeft: string | null;
-  bottomRight: string | null;
-}
 
 export interface EditorChrome {
   labels: BorderLabels;
@@ -82,7 +81,7 @@ export class RoundedInputEditor extends CustomEditor {
     };
 
     return [
-      this.renderRule(lineWidth, labels.topLeft, labels.topRight),
+      this.renderRule(lineWidth, labels.top),
       wrapLine(""),
       ...bodyLines.map(wrapLine),
       wrapLine(""),
@@ -94,7 +93,7 @@ export class RoundedInputEditor extends CustomEditor {
             wrapLine(""),
           ]
         : []),
-      this.renderRule(lineWidth, labels.bottomLeft, labels.bottomRight),
+      this.renderRule(lineWidth, labels.bottom),
     ];
   }
 
@@ -106,25 +105,12 @@ export class RoundedInputEditor extends CustomEditor {
     return this.borderColor(prefix) + styledLabel + this.borderColor("─".repeat(fill));
   }
 
-  private renderRule(
-    lineWidth: number,
-    left: string | null,
-    right: string | null,
-  ): string {
-    if (lineWidth < 1) return "";
-    if (!left && !right) return this.borderColor("─".repeat(lineWidth));
-
-    const leftText = left ? ` ${left} ` : "";
-    const rightText = right ? ` ${right} ` : "";
-    const leftPrefix = leftText ? "──" : "";
-    const rightSuffix = rightText ? "──" : "";
-    const reserved = visibleWidth(leftPrefix) + visibleWidth(leftText) + visibleWidth(rightText) + visibleWidth(rightSuffix);
-
-    if (reserved >= lineWidth) {
-      return truncateToWidth(leftText || rightText, lineWidth, "");
-    }
-
-    const gap = lineWidth - reserved;
-    return this.borderColor(leftPrefix) + leftText + this.borderColor("─".repeat(gap)) + rightText + this.borderColor(rightSuffix);
+  private renderRule(lineWidth: number, line: BorderLine): string {
+    return renderBorderLine({
+      lineWidth,
+      line,
+      separator: separator(this.labelTheme),
+      borderColor: (text) => this.borderColor(text),
+    });
   }
 }

@@ -3,16 +3,24 @@ import {
   type ExtensionContext,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { BorderLabels } from "./editor";
+import type { BorderItem, BorderLabels } from "./border-layout";
 import type { GitCache, RateWindow, UsageSnapshot } from "../core/types";
 import type { UsageState } from "../seams/usage-state";
 import {
   contextColor,
   percentColor,
   RESET_ICON,
-  separator,
   thinkingColor,
 } from "./theme";
+
+const TOP_MODEL_PRIORITY = 50;
+const TOP_THINKING_PRIORITY = 40;
+const TOP_FAST_PRIORITY = 30;
+const TOP_SESSION_USAGE_PRIORITY = 20;
+const TOP_WEEKLY_USAGE_PRIORITY = 10;
+const BOTTOM_BRANCH_PRIORITY = 30;
+const BOTTOM_CWD_PRIORITY = 20;
+const BOTTOM_CONTEXT_PRIORITY = 10;
 
 function renderThinking(theme: Theme, thinkingLevel: string): string {
   const label = thinkingLevel === "off" ? "no-thinking" : thinkingLevel;
@@ -36,6 +44,13 @@ function usageWindows(snapshot: UsageSnapshot | null): RateWindow[] {
     );
   }
   return snapshot.windows;
+}
+
+function usageWindowPriority(window: RateWindow): number {
+  const label = window.label.toLowerCase();
+  return label.includes("week") || label === "7d"
+    ? TOP_WEEKLY_USAGE_PRIORITY
+    : TOP_SESSION_USAGE_PRIORITY;
 }
 
 function compactPath(path: string, homeDir: string | undefined): string {
@@ -91,28 +106,76 @@ export function buildBorderLabels(
   thinkingLevel = getThinkingLevel(ctx),
 ): BorderLabels {
   const modelName = ctx.model?.name ?? null;
-  const topLeft = modelName
-    ? [
-        theme.fg("accent", ` ${modelName}`),
-        renderThinking(theme, thinkingLevel),
-        ...(fastModeEnabled ? [theme.fg("success", `󱐋 fast`)] : []),
-      ].join(separator(theme))
-    : null;
+  const topLeft: BorderItem[] = [
+    ...(modelName
+      ? [
+          {
+            id: "model",
+            text: theme.fg("accent", ` ${modelName}`),
+            priority: TOP_MODEL_PRIORITY,
+          },
+        ]
+      : []),
+    {
+      id: "thinking",
+      text: renderThinking(theme, thinkingLevel),
+      priority: TOP_THINKING_PRIORITY,
+    },
+    ...(fastModeEnabled
+      ? [
+          {
+            id: "fast",
+            text: theme.fg("success", `󱐋 fast`),
+            priority: TOP_FAST_PRIORITY,
+          },
+        ]
+      : []),
+  ];
 
-  const usageLine = usageWindows(usageState.current())
-    .map((window) => renderUsageWindow(theme, window))
-    .join(separator(theme));
+  const topRight: BorderItem[] = usageWindows(usageState.current()).map(
+    (window, index) => ({
+      id: `usage:${index}:${window.label}`,
+      text: renderUsageWindow(theme, window),
+      priority: usageWindowPriority(window),
+    }),
+  );
 
   const cwd = theme.fg(
     "accent",
     compactPath(ctx.cwd, process.env.HOME || process.env.USERPROFILE),
   );
   const branch = renderBranch(theme, git);
+  const bottomLeft: BorderItem[] = [
+    ...(branch
+      ? [
+          {
+            id: "branch",
+            text: branch,
+            priority: BOTTOM_BRANCH_PRIORITY,
+          },
+        ]
+      : []),
+    {
+      id: "cwd",
+      text: cwd,
+      priority: BOTTOM_CWD_PRIORITY,
+    },
+  ];
 
   return {
-    topLeft,
-    topRight: usageLine || null,
-    bottomLeft: branch ? `${cwd}${separator(theme)}${branch}` : cwd,
-    bottomRight: renderContextWindow(ctx, theme),
+    top: {
+      left: topLeft,
+      right: topRight,
+    },
+    bottom: {
+      left: bottomLeft,
+      right: [
+        {
+          id: "context",
+          text: renderContextWindow(ctx, theme),
+          priority: BOTTOM_CONTEXT_PRIORITY,
+        },
+      ],
+    },
   };
 }
