@@ -3,7 +3,7 @@ import type { Component } from "@earendil-works/pi-tui";
 import { CACHE_BYPASS_REASONS, type CacheBypassReason } from "./render-cache";
 import type { FrameKind } from "./types";
 
-const DEBUG_WIDGET_ID = "pi-chat-frames-debug";
+const DEBUG_WIDGET_ID = "pi-chat-ui-debug";
 const MAX_SAMPLES = 100;
 const REFRESH_INTERVAL_MS = 250;
 const FRAME_KINDS: FrameKind[] = ["user", "tool", "skill", "custom", "bash", "compaction", "branch"];
@@ -91,7 +91,7 @@ const state: DebugState = {
 };
 
 export function isDebugEnabled(): boolean {
-  return process.env.PI_CHAT_FRAMES_DEBUG === "1";
+  return process.env.PI_CHAT_UI_DEBUG === "1";
 }
 
 function nowMs(): number {
@@ -150,7 +150,7 @@ function formatDebugWidgetLines(): string[] {
   );
 
   return [
-    `pi-chat-frames debug: ${isDebugEnabled() ? "on" : "off"}`,
+    `pi-chat-ui debug: ${isDebugEnabled() ? "on" : "off"}`,
     `renders: ${state.totalRenders} (${renderCountsByKind})`,
     `recent avg: whole ${formatMs(averageWhole)} original ${formatMs(averageOriginal)} overhead ${formatMs(averageOverhead)}`,
     `recent overhead by kind: ${overheadByKind}`,

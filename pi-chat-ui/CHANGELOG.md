@@ -13,10 +13,10 @@
 
 ### Added
 
-- Added debug metrics for same-width repeat renders, cache hits, and cache bypass reasons behind `PI_CHAT_FRAMES_DEBUG=1`.
+- Added debug metrics for same-width repeat renders, cache hits, and cache bypass reasons behind `PI_CHAT_UI_DEBUG=1`.
 - Added focused cache safety tests for cache hits, width/content misses, pending-tool bypasses, terminal image bypasses, oversized output bypasses, and bash command key normalization.
 
 ### Notes
 
-- No package version was bumped because `extensions/pi-chat-frames/package.json` does not define a `version` field.
+- No package version was bumped because `extensions/pi-chat-ui/package.json` does not define a `version` field.
 - A separate visual polish issue remains possible: active bash tool preparation/streaming can briefly flicker background ANSI before normal output settles. This is not treated as cache staleness because completed output remains correct and pending tools are cache-bypassed.

@@ -1,9 +1,9 @@
 packages:
-  - pi-custom-input
+  - pi-prompt-ui
   - pi-codex-fast
   - pi-usage-stats
   - pi-whimsical
-  - pi-chat-frames
+  - pi-chat-ui
 allowBuilds:
   "@google/genai": true
   koffi: true

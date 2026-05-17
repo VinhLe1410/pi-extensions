@@ -1,0 +1,5 @@
+{
+  "name": "pi-chat-ui",
+  "private": true,
+  "description": "Pi chat UI with framed rendering for user messages and tool usage"
+}

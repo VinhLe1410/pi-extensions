@@ -5,7 +5,7 @@ import { PATCHED, ORIGINAL_RENDER } from "./symbols";
 export type FrameKind = "user" | "tool" | "skill" | "custom" | "bash" | "compaction" | "branch";
 export type ToolState = "pending" | "success" | "error";
 
-export interface ChatFramesState {
+export interface ChatUiState {
   activeTheme?: Theme;
 }
 

@@ -1,6 +1,6 @@
-# pi-chat-frames
+# pi-chat-ui
 
-`pi-chat-frames` is a Pi extension that wraps Pi chat-history blocks in colored terminal frames.
+`pi-chat-ui` is a Pi extension that wraps Pi chat-history blocks in colored terminal frames.
 
 It preserves Pi's existing renderers by patching their `render(width)` methods, calling the original renderer at a reduced width, then post-processing the returned terminal lines into framed output.
 
@@ -67,7 +67,7 @@ It preserves Pi's existing renderers by patching their `render(width)` methods, 
 
 - `core/symbols.ts`
   - Defines global symbols used for patch state, original render methods, and global extension state.
-  - Symbol keys are intentionally namespaced as `pi-chat-frames.*`.
+  - Symbol keys are intentionally namespaced as `pi-chat-ui.*`.
 
 - `core/types.ts`
   - Shared core types such as `FrameKind`, `ToolState`, extension state, and patched renderable components.
@@ -123,7 +123,7 @@ It preserves Pi's existing renderers by patching their `render(width)` methods, 
 After code changes, run:
 
 ```sh
-pnpm --filter pi-chat-frames exec tsc --noEmit --pretty false
+pnpm --filter pi-chat-ui exec tsc --noEmit --pretty false
 ```
 
 For rendering-sensitive changes, also run:
