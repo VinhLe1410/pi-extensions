@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { stripAnsi } from "./ansi";
 import { renderFrame } from "./frame";
 
 vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => ({
@@ -31,6 +32,22 @@ describe("renderFrame", () => {
         "[32m╰──────────────╯[39m",
       ]
     `);
+  });
+
+  it("strips Pi's built-in user bash borders before framing", () => {
+    const output = renderFrame(["", "────────────", " $ echo Testing", "", " Testing", "────────────"], 18, "bash");
+
+    expect(output).toMatchInlineSnapshot(`
+      [
+        "",
+        "[36m╭─[39m bash [36m─────────╮[39m",
+        "[36m│[39m $ echo Testing [36m│[39m",
+        "[36m│[39m                [36m│[39m",
+        "[36m│[39m Testing        [36m│[39m",
+        "[36m╰────────────────╯[39m",
+      ]
+    `);
+    expect(output.filter((line) => stripAnsi(line).trim() === "────────────")).toHaveLength(0);
   });
 
   it("replaces tool content with a pending line", () => {

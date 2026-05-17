@@ -64,6 +64,23 @@ function trimTrailingBlankLines(lines: string[]): string[] {
   return lines.slice(0, end);
 }
 
+function isBashBuiltInBorderLine(line: string): boolean {
+  const text = stripAnsi(line).trim();
+  return text.length > 0 && /^─+$/.test(text);
+}
+
+function stripBashBuiltInBorders(lines: string[]): string[] {
+  const { leading, body } = splitLeadingBlank(lines);
+  if (body.length < 2) return lines;
+
+  const first = body[0];
+  const last = body.at(-1);
+  if (!first || !last) return lines;
+  if (!isBashBuiltInBorderLine(first) || !isBashBuiltInBorderLine(last)) return lines;
+
+  return [...leading, ...body.slice(1, -1)];
+}
+
 function topBorder(kind: FrameKind, innerWidth: number, toolState: ToolState): string {
   const title = labelColor(kind);
   const titleWidth = visibleWidth(title);
@@ -183,7 +200,8 @@ function applyCollapsedContentPlaceholder(
 }
 
 function normalizeFrameContent(lines: string[], kind: FrameKind, options: FrameOptions): FrameContent | undefined {
-  const { leading, body } = splitLeadingBlank(lines);
+  const normalizedLines = kind === "bash" ? stripBashBuiltInBorders(lines) : lines;
+  const { leading, body } = splitLeadingBlank(normalizedLines);
   if (body.length === 0) return undefined;
 
   let oscStart = false;
