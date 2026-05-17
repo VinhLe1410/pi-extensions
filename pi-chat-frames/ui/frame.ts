@@ -13,7 +13,12 @@ import {
   stripOscMarkers,
 } from "./ansi";
 import { pullToolHintFromLines } from "./hints";
-import { indentTerminalImageRows, splitTerminalImageRows } from "./terminal-images";
+import {
+  canRenderTerminalImageRowsInsideFrame,
+  indentTerminalImageRows,
+  isTerminalImageLine,
+  splitTerminalImageRows,
+} from "./terminal-images";
 import { dimColor, frameColor, labelColor, toolBackgroundColor } from "./theme";
 
 export interface FrameOptions {
@@ -218,19 +223,45 @@ function normalizeFrameContent(lines: string[], kind: FrameKind, options: FrameO
   };
 }
 
+function renderInsideFrameImageRows(
+  imageRows: string[],
+  innerWidth: number,
+  kind: FrameKind,
+  toolState: ToolState,
+): string[] {
+  return imageRows.map((line) => {
+    if (isTerminalImageLine(line)) {
+      return (
+        frameColor(kind, "│", toolState) +
+        line +
+        `\x1b[${innerWidth + 2}G` +
+        frameColor(kind, "│", toolState)
+      );
+    }
+
+    return frameColor(kind, "│", toolState) + padLine(line, innerWidth) + frameColor(kind, "│", toolState);
+  });
+}
+
 function renderFrameContent(
   content: FrameContent,
   innerWidth: number,
   kind: FrameKind,
   toolState: ToolState,
 ): string[] {
-  const framedImageRows = indentTerminalImageRows(content.terminalImageRows);
+  const shouldRenderImagesInsideFrame = canRenderTerminalImageRowsInsideFrame(content.terminalImageRows);
+  const insideFrameImageRows = shouldRenderImagesInsideFrame
+    ? renderInsideFrameImageRows(content.terminalImageRows, innerWidth, kind, toolState)
+    : [];
+  const outsideFrameImageRows = shouldRenderImagesInsideFrame ? [] : indentTerminalImageRows(content.terminalImageRows);
+
   if (content.textBody.length === 0) {
     return [
       ...content.leadingBlankLines,
       (content.oscStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
+      ...insideFrameImageRows,
       (content.oscEnd ? OSC133_ZONE_END + OSC133_ZONE_FINAL : "") + bottomBorder(kind, innerWidth, toolState),
-      ...framedImageRows,
+      ...outsideFrameImageRows,
     ];
   }
 
@@ -255,8 +286,9 @@ function renderFrameContent(
     ...placeholderContent.leadingBlankLines,
     (placeholderContent.oscStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
     ...separated,
+    ...insideFrameImageRows,
     (placeholderContent.oscEnd ? OSC133_ZONE_END + OSC133_ZONE_FINAL : "") + bottomBorder(kind, innerWidth, toolState, placeholderContent.bottomRightHint),
-    ...framedImageRows,
+    ...outsideFrameImageRows,
   ];
 }
 
