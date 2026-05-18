@@ -39,14 +39,6 @@ function labelColorToken(kind: FrameKind): ThemeColor {
   return "customMessageLabel";
 }
 
-type ToolBackgroundToken = "toolPendingBg" | "toolSuccessBg" | "toolErrorBg";
-
-function toolBackgroundToken(toolState: ToolState): ToolBackgroundToken {
-  if (toolState === "success") return "toolSuccessBg";
-  if (toolState === "error") return "toolErrorBg";
-  return "toolPendingBg";
-}
-
 export function frameColor(kind: FrameKind, text: string, toolState: ToolState = "pending"): string {
   const theme = getActiveTheme();
   if (!theme) return `\x1b[${fallbackAnsi(kind, toolState)}m${text}\x1b[39m`;
@@ -64,10 +56,4 @@ export function dimColor(text: string): string {
   const theme = getActiveTheme();
   if (!theme) return `\x1b[2m${text}\x1b[22m`;
   return theme.fg("dim", text);
-}
-
-export function toolBackgroundColor(text: string, toolState: ToolState): string {
-  const theme = getActiveTheme();
-  if (!theme) return text;
-  return theme.bg(toolBackgroundToken(toolState), text);
 }

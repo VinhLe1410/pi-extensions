@@ -9,7 +9,6 @@ import { renderFrame } from "../ui/frame";
 function renderFramedRowsWithDebug(
   component: Component,
   width: number,
-  innerWidth: number,
   rendered: string[],
   kind: FrameKind,
 ): string[] {
@@ -26,7 +25,7 @@ function renderFramedRowsWithDebug(
     recordFrameCacheBypass(cached.reason);
   }
 
-  const options = kind === "tool" ? getToolFrameOptions(component, innerWidth, rendered, toolState) : {};
+  const options = kind === "tool" ? getToolFrameOptions(component, rendered, toolState) : {};
   const output = renderFrame(rendered, width, kind, toolState, options);
   const stored = setFrameCacheRows(cacheRequest, output);
   if (stored.status === "bypass") recordFrameCacheBypass(stored.reason);
@@ -51,7 +50,7 @@ export function patchRenderWithDebug(prototype: Renderable, kind: FrameKind): vo
       originalDurationMs = performance.now() - originalStart;
 
       const frameStart = performance.now();
-      output = renderFramedRowsWithDebug(this, width, innerWidth, rendered, kind);
+      output = renderFramedRowsWithDebug(this, width, rendered, kind);
       frameOverheadMs = performance.now() - frameStart;
     }
 

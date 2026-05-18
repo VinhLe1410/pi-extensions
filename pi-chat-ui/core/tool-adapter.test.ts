@@ -19,7 +19,7 @@ describe("getToolState", () => {
 });
 
 describe("getToolFrameOptions", () => {
-  it("uses bash args for the header and pending line", () => {
+  it("uses the rendered header span as an invisible pending boundary", () => {
     expect(
       getToolFrameOptions(
         component([], {
@@ -27,22 +27,19 @@ describe("getToolFrameOptions", () => {
           args: { command: "pnpm    test", timeout: 30 },
           callRendererComponent: component(["ignored rendered shell", ""]),
         }),
-        24,
         ["ignored rendered shell", "", "output"],
         "pending",
       ),
     ).toMatchInlineSnapshot(`
       {
-        "headerLine": "$ pnpm test (timeout [0m...[0m",
-        "headerLineSpan": 1,
+        "bodyStartAfter": 1,
         "pendingLine": "[2m executing...[22m",
         "pendingLineMode": "replace",
-        "separatorAfter": 2,
       }
     `);
   });
 
-  it("does not re-render bash call components when rendered lines contain the header span", () => {
+  it("does not re-render call components", () => {
     const render = vi.fn(() => ["ignored rendered shell", ""]);
 
     expect(
@@ -52,40 +49,34 @@ describe("getToolFrameOptions", () => {
           args: { command: "pnpm test" },
           callRendererComponent: { render, invalidate: () => {} },
         }),
-        24,
         ["ignored rendered shell", "", "output"],
         "pending",
       ),
     ).toMatchInlineSnapshot(`
       {
-        "headerLine": "$ pnpm test",
-        "headerLineSpan": 1,
+        "bodyStartAfter": 1,
         "pendingLine": "[2m executing...[22m",
         "pendingLineMode": "replace",
-        "separatorAfter": 2,
       }
     `);
     expect(render).not.toHaveBeenCalled();
   });
 
-  it("collapses multi-line rendered call headers", () => {
+  it("keeps multi-line rendered call headers intact", () => {
     expect(
       getToolFrameOptions(
         component([], {
           toolName: "read",
           callRendererComponent: component(["read", "very-long-file-name.ts", "", "body"]),
         }),
-        14,
         ["read", "very-long-file-name.ts", "", "body"],
         "pending",
       ),
     ).toMatchInlineSnapshot(`
       {
-        "headerLine": "read very-l...[0m",
-        "headerLineSpan": 2,
+        "bodyStartAfter": 2,
         "pendingLine": "[2m reading...[22m",
         "pendingLineMode": "replace",
-        "separatorAfter": 3,
       }
     `);
   });
@@ -100,32 +91,28 @@ describe("getToolFrameOptions", () => {
           getRenderShell: () => "self",
           callRendererComponent: { render, invalidate: () => {} },
         }),
-        14,
         ["", "edit", "file.ts", "", "diff"],
         "pending",
       ),
     ).toMatchInlineSnapshot(`
       {
-        "headerLine": "edit file.t...\u001b[0m",
-        "headerLineSpan": 2,
+        "bodyStartAfter": 2,
         "pendingLine": "\u001b[2m editing...\u001b[22m",
         "pendingLineMode": "replace",
-        "separatorAfter": 2,
       }
     `);
     expect(render).not.toHaveBeenCalled();
   });
 
-  it("falls back to rendered body separators without a call header", () => {
+  it("falls back to rendered body boundaries without a call header", () => {
     expect(
       getToolFrameOptions(
         component([], {
           toolName: "write",
         }),
-        20,
         ["", "Write file", "path.ts", "", "done"],
         "success",
       ),
-    ).toEqual({ separatorAfter: 2 });
+    ).toEqual({ bodyStartAfter: 2 });
   });
 });

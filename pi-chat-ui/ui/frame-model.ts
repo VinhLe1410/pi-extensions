@@ -4,7 +4,7 @@ export interface FrameContent {
   terminalImageRows: string[];
   oscStart: boolean;
   oscEnd: boolean;
-  separatorAfter?: number;
+  bodyStartAfter?: number;
   pendingLine?: string;
   pendingLineMode?: "replace" | "prepend";
   bottomRightHint?: string;
