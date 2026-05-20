@@ -9,11 +9,10 @@ import {
 } from "./border-layout";
 import { separator } from "./theme";
 
-const INPUT_PADDING_LEFT = 1;
+const INPUT_PADDING_LEFT = 0;
 
 export interface EditorChrome {
   labels: BorderLabels;
-  backgroundAnsi: string | null;
 }
 
 function padRight(text: string, width: number): string {
@@ -27,21 +26,6 @@ function stripAnsi(text: string): string {
 function isHorizontalBorder(line: string): boolean {
   const plain = stripAnsi(line);
   return plain.length > 0 && /^[─ ↑↓0-9more]+$/.test(plain) && plain.includes("─");
-}
-
-function reapplyBackgroundAfterReset(text: string, backgroundAnsi: string): string {
-  return text
-    .replace(/\x1b\[(?:0)?m/g, (reset) => `${reset}${backgroundAnsi}`)
-    .replace(/\x1b\[49m/g, (reset) => `${reset}${backgroundAnsi}`);
-}
-
-function createBackgroundApplier(backgroundAnsi: string | null): (text: string) => string {
-  if (!backgroundAnsi) return (text) => text;
-
-  return (text) => {
-    if (!text.includes("\x1b[")) return `${backgroundAnsi}${text}\x1b[49m`;
-    return `${backgroundAnsi}${reapplyBackgroundAfterReset(text, backgroundAnsi)}\x1b[49m`;
-  };
 }
 
 export class RoundedInputEditor extends CustomEditor {
@@ -72,19 +56,15 @@ export class RoundedInputEditor extends CustomEditor {
     const bodyLines = lines.slice(1, bodyEnd);
     const suggestionLines = bottomIndex === -1 ? [] : lines.slice(bottomIndex + 1);
 
-    const { labels, backgroundAnsi } = this.getChrome();
-    const applyBackground = createBackgroundApplier(backgroundAnsi);
+    const { labels } = this.getChrome();
     const wrapLine = (line: string): string => {
       const paddedLine = leftPadding + line;
-      const content = padRight(truncateToWidth(paddedLine, lineWidth, ""), lineWidth);
-      return applyBackground(content);
+      return padRight(truncateToWidth(paddedLine, lineWidth, ""), lineWidth);
     };
 
     return [
       this.renderRule(lineWidth, labels.top),
-      wrapLine(""),
       ...bodyLines.map(wrapLine),
-      wrapLine(""),
       ...(suggestionLines.length > 0
         ? [
             this.renderSectionSeparator(lineWidth, "auto-suggestions"),

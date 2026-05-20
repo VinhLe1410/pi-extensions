@@ -17,7 +17,6 @@ import { createUsageState } from "./seams/usage-state";
 import { buildBorderLabels, getThinkingLevel } from "./ui/border-labels";
 import { RoundedInputEditor } from "./ui/editor";
 import { renderExtensionStatusFooter } from "./ui/status-footer";
-import { thinkingBackgroundAnsi } from "./ui/theme";
 
 interface CodexFastState {
   enabled?: boolean;
@@ -96,7 +95,6 @@ export default function (pi: ExtensionAPI) {
         const thinkingLevel = getThinkingLevel(ctx);
         return {
           labels: buildBorderLabels(ctx, ctx.ui.theme, git.current(), usage, fastModeEnabled, thinkingLevel),
-          backgroundAnsi: thinkingBackgroundAnsi(ctx.ui.theme, thinkingLevel),
         };
       }, ctx.ui.theme);
     });

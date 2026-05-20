@@ -19,8 +19,8 @@ const TOP_FAST_PRIORITY = 30;
 const TOP_SESSION_USAGE_PRIORITY = 20;
 const TOP_WEEKLY_USAGE_PRIORITY = 10;
 const BOTTOM_BRANCH_PRIORITY = 30;
-const BOTTOM_CWD_PRIORITY = 20;
-const BOTTOM_CONTEXT_PRIORITY = 10;
+const BOTTOM_CONTEXT_PRIORITY = 20;
+const BOTTOM_CWD_PRIORITY = 10;
 
 function renderThinking(theme: Theme, thinkingLevel: string): string {
   const label = thinkingLevel === "off" ? "no-thinking" : thinkingLevel;
