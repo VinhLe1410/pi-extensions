@@ -31,6 +31,8 @@ importers:
 
   pi-codex-fast: {}
 
+  pi-git-commit: {}
+
   pi-prompt-ui: {}
 
   pi-usage-stats: {}

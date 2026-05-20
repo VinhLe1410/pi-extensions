@@ -1,0 +1,5 @@
+{
+  "name": "pi-git-commit",
+  "private": true,
+  "description": "User-invoked git commit command for Pi"
+}

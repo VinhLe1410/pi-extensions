@@ -4,6 +4,7 @@ packages:
   - pi-usage-stats
   - pi-whimsical
   - pi-chat-ui
+  - pi-git-commit
 allowBuilds:
   "@google/genai": true
   koffi: true
