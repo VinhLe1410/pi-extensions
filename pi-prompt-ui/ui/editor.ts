@@ -67,7 +67,7 @@ export class RoundedInputEditor extends CustomEditor {
       ...bodyLines.map(wrapLine),
       ...(suggestionLines.length > 0
         ? [
-            this.renderSectionSeparator(lineWidth, "auto-suggestions"),
+            this.renderSectionSeparator(lineWidth, "󰳽 auto-suggestions"),
             wrapLine(""),
             ...suggestionLines.map(wrapLine),
             wrapLine(""),
