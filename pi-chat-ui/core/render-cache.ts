@@ -1,5 +1,6 @@
 import type { Component } from "@earendil-works/pi-tui";
 import type { FrameKind, ToolState } from "./types";
+import type { ToolFrameOptions } from "../ui/frame-model";
 
 const MAX_SOURCE_ROWS = 200;
 const MAX_OUTPUT_ROWS = 250;
@@ -25,7 +26,7 @@ export const CACHE_BYPASS_REASONS = [
 
 export type CacheBypassReason = (typeof CACHE_BYPASS_REASONS)[number];
 
-export interface FrameCacheRequest {
+export interface FrameCacheRequest extends ToolFrameOptions {
   component: Component;
   width: number;
   kind: FrameKind;
@@ -85,6 +86,22 @@ function toolStateKey(component: Component, toolState: ToolState): { key: string
   return { key: `${toolName}\n${shell}\n${args}` };
 }
 
+function flagKey(value: boolean | undefined): string {
+  return value ? "1" : "0";
+}
+
+function toolFrameOptionsKey(request: FrameCacheRequest): string {
+  if (request.kind !== "tool") return "";
+  return [
+    request.bodyStartAfter ?? "",
+    flagKey(request.splitToolOutput),
+    flagKey(request.collapseToolOutput),
+    flagKey(request.hideToolOutput),
+    flagKey(request.trimToolOutputTrailingBlanks),
+    flagKey(request.expanded),
+  ].join("\n");
+}
+
 function frameCacheKey(request: FrameCacheRequest): { key: string } | { bypass: CacheBypassReason } {
   if (request.width < 4) return { bypass: "narrow-width" };
   if (request.rendered.length === 0) return { bypass: "empty-render" };
@@ -95,7 +112,7 @@ function frameCacheKey(request: FrameCacheRequest): { key: string } | { bypass: 
   const renderedKey = sourceRowsKey(request.rendered);
   if ("bypass" in renderedKey) return renderedKey;
 
-  return { key: `${request.width}\n${request.kind}\n${request.toolState}\n${stateKey.key}\n${renderedKey.key}` };
+  return { key: `${request.width}\n${request.kind}\n${request.toolState}\n${stateKey.key}\n${toolFrameOptionsKey(request)}\n${renderedKey.key}` };
 }
 
 function isOutputCacheable(rows: string[]): boolean {

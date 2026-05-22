@@ -1,14 +1,20 @@
 import type { Component } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import type { ToolState } from "./types";
-import type { FrameOptions } from "../ui/frame";
+import type { ToolFrameOptions } from "../ui/frame-model";
 import { stripAnsi } from "../ui/ansi";
-import { dimColor } from "../ui/theme";
+
+interface ToolResultContentBlock {
+  type?: string;
+}
 
 interface ToolExecutionLike extends Component {
   toolName?: string;
   isPartial?: boolean;
-  result?: { isError?: boolean };
+  expanded?: boolean;
+  callRendererComponent?: Component;
+  resultRendererComponent?: Component;
+  result?: { isError?: boolean; content?: ToolResultContentBlock[] };
 }
 
 function asToolExecution(component: Component): ToolExecutionLike {
@@ -52,26 +58,52 @@ function getBodyStartAfter(renderedLines: string[]): number | undefined {
   return countHeaderEnd(renderedLines.slice(bodyStart));
 }
 
-function getPendingLine(toolName: string | undefined): string {
-  if (toolName === "read") return dimColor(" reading...");
-  if (toolName === "write") return dimColor(" writing...");
-  if (toolName === "edit") return dimColor(" editing...");
-  if (toolName === "bash") return dimColor(" executing...");
-  return dimColor(" running...");
+function hasWritePreviewOutput(
+  tool: ToolExecutionLike,
+  renderedLines: string[],
+  bodyStartAfter: number | undefined,
+): boolean {
+  if (tool.toolName !== "write" || !tool.callRendererComponent || bodyStartAfter === undefined) return false;
+  return renderedLines.slice(bodyStartAfter).some((line) => stripAnsi(line).trim() !== "");
+}
+
+function shouldSplitToolOutput(
+  tool: ToolExecutionLike,
+  renderedLines: string[],
+  bodyStartAfter: number | undefined,
+): boolean {
+  return Boolean(tool.callRendererComponent && tool.resultRendererComponent) || hasWritePreviewOutput(tool, renderedLines, bodyStartAfter);
+}
+
+function shouldCollapseToolOutput(tool: ToolExecutionLike, toolState: ToolState): boolean {
+  return (tool.toolName === "read" || tool.toolName === "bash") && toolState !== "error" && !tool.expanded;
+}
+
+function hasReadImageOutput(tool: ToolExecutionLike, renderedLines: string[]): boolean {
+  if (tool.toolName !== "read") return false;
+  if (tool.result?.content?.some((block) => block.type === "image")) return true;
+  return renderedLines.some((line) => line.includes("\x1b_G") || line.includes("\x1b]1337;File="));
 }
 
 export function getToolFrameOptions(
   component: Component,
   renderedLines: string[],
   toolState: ToolState,
-): FrameOptions {
+): ToolFrameOptions {
   const tool = asToolExecution(component);
   const bodyStartAfter = getBodyStartAfter(renderedLines);
-  const pendingLine = toolState === "pending" ? getPendingLine(tool.toolName) : undefined;
-  const pendingLineMode = pendingLine ? (tool.result ? "prepend" : "replace") : undefined;
+  const splitToolOutput = shouldSplitToolOutput(tool, renderedLines, bodyStartAfter);
+  const collapseToolOutput = shouldCollapseToolOutput(tool, toolState);
+  const hideToolOutput = hasReadImageOutput(tool, renderedLines);
+  const trimToolOutputTrailingBlanks = tool.toolName === "edit";
+  const expanded = Boolean(tool.expanded);
 
   return {
     ...(bodyStartAfter === undefined ? {} : { bodyStartAfter }),
-    ...(pendingLine ? { pendingLine, pendingLineMode } : {}),
+    ...(splitToolOutput ? { splitToolOutput } : {}),
+    ...(collapseToolOutput ? { collapseToolOutput } : {}),
+    ...(hideToolOutput ? { hideToolOutput } : {}),
+    ...(trimToolOutputTrailingBlanks ? { trimToolOutputTrailingBlanks } : {}),
+    ...(expanded ? { expanded } : {}),
   };
 }

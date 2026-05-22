@@ -133,6 +133,87 @@ describe("frame render cache", () => {
     expect(getCachedFrameRows(request)).toBe(output);
   });
 
+  it("misses when tool output boundary changes", () => {
+    const owner = component({ toolName: "write" });
+    const request = {
+      component: owner,
+      width: 20,
+      kind: "tool" as const,
+      toolState: "success" as const,
+      rendered: ["write", "file.ts", "", "done"],
+      bodyStartAfter: 1,
+      splitToolOutput: true,
+    };
+
+    setCachedFrameRows(request, ["framed write"]);
+
+    expect(getCachedFrameRows({ ...request, bodyStartAfter: 2 })).toBeUndefined();
+  });
+
+  it("misses when tool expanded state changes", () => {
+    const owner = component({ toolName: "read" });
+    const request = {
+      component: owner,
+      width: 20,
+      kind: "tool" as const,
+      toolState: "success" as const,
+      rendered: ["read file", "", "contents"],
+      expanded: false,
+    };
+
+    setCachedFrameRows(request, ["collapsed read"]);
+
+    expect(getCachedFrameRows({ ...request, expanded: true })).toBeUndefined();
+  });
+
+  it("misses when tool collapse state changes", () => {
+    const owner = component({ toolName: "read" });
+    const request = {
+      component: owner,
+      width: 20,
+      kind: "tool" as const,
+      toolState: "success" as const,
+      rendered: ["read file", "", "contents"],
+      collapseToolOutput: true,
+    };
+
+    setCachedFrameRows(request, ["collapsed read"]);
+
+    expect(getCachedFrameRows({ ...request, collapseToolOutput: false })).toBeUndefined();
+  });
+
+  it("misses when edit trailing blank trimming changes", () => {
+    const owner = component({ toolName: "edit" });
+    const request = {
+      component: owner,
+      width: 20,
+      kind: "tool" as const,
+      toolState: "success" as const,
+      rendered: ["edit file", "", "diff", ""],
+      trimToolOutputTrailingBlanks: false,
+    };
+
+    setCachedFrameRows(request, ["framed edit"]);
+
+    expect(getCachedFrameRows({ ...request, trimToolOutputTrailingBlanks: true })).toBeUndefined();
+  });
+
+  it("misses when read image output is hidden", () => {
+    const owner = component({ toolName: "read" });
+    const request = {
+      component: owner,
+      width: 20,
+      kind: "tool" as const,
+      toolState: "success" as const,
+      rendered: ["read image", "", "image hidden"],
+      hideToolOutput: false,
+    };
+
+    setCachedFrameRows(request, ["framed read"]);
+
+    expect(getCachedFrameRows({ ...request, hideToolOutput: true })).toBeUndefined();
+  });
+
   it("does not cache oversized source rows", () => {
     const owner = component();
     const request = {

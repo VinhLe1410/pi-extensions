@@ -12,11 +12,11 @@ function renderFramedRows(
   kind: FrameKind,
 ): string[] {
   const toolState = kind === "tool" ? getToolState(component) : "pending";
-  const cacheRequest = { component, width, kind, toolState, rendered };
+  const options = kind === "tool" ? getToolFrameOptions(component, rendered, toolState) : {};
+  const cacheRequest = { component, width, kind, toolState, rendered, ...options };
   const cached = getCachedFrameRows(cacheRequest);
   if (cached) return cached;
 
-  const options = kind === "tool" ? getToolFrameOptions(component, rendered, toolState) : {};
   const output = renderFrame(rendered, width, kind, toolState, options);
   setCachedFrameRows(cacheRequest, output);
   return output;

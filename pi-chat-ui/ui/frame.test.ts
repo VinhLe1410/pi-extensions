@@ -49,21 +49,169 @@ describe("renderFrame", () => {
     expect(output.filter((line) => stripAnsi(line).trim() === "────────────")).toHaveLength(0);
   });
 
-  it("replaces tool content with a pending line", () => {
+  it("trims pending tool trailing blank rows", () => {
+    expect(renderFrame(["edit file", ""], 18, "tool", "pending", { bodyStartAfter: 1 })).toMatchInlineSnapshot(`
+      [
+        "[90m╭─[39m tool [90m─────────╮[39m",
+        "[90m│[39medit file       [90m│[39m",
+        "[90m╰────────────────╯[39m",
+      ]
+    `);
+  });
+
+  it("collapses pending tool output without a placeholder", () => {
     expect(
       renderFrame(["read file", "", "old content"], 18, "tool", "pending", {
         bodyStartAfter: 1,
-        pendingLine: "\x1b[2m reading...\x1b[22m",
-        pendingLineMode: "replace",
+        splitToolOutput: true,
+        collapseToolOutput: true,
       }),
     ).toMatchInlineSnapshot(`
       [
         "[90m╭─[39m tool [90m─────────╮[39m",
         "[90m│[39mread file       [90m│[39m",
-        "[90m│[39m[2m reading...     [22m[90m│[39m",
         "[90m╰────────────────╯[39m",
       ]
     `);
+  });
+
+  it("renders split tool output with an output separator", () => {
+    expect(
+      renderFrame(["write file", "", "done"], 18, "tool", "success", {
+        bodyStartAfter: 1,
+        splitToolOutput: true,
+      }),
+    ).toMatchInlineSnapshot(`
+      [
+        "[32m╭─[39m tool [32m─────────╮[39m",
+        "[32m│[39mwrite file      [32m│[39m",
+        "[32m├─[39m output [32m───────┤[39m",
+        "[32m│[39mdone            [32m│[39m",
+        "[32m╰────────────────╯[39m",
+      ]
+    `);
+  });
+
+  it("trims edit output trailing blank rows", () => {
+    expect(
+      renderFrame(["edit file.ts", "", "-old", "+new", ""], 22, "tool", "success", {
+        bodyStartAfter: 1,
+        splitToolOutput: true,
+        trimToolOutputTrailingBlanks: true,
+      }),
+    ).toMatchInlineSnapshot(`
+      [
+        "[32m╭─[39m tool [32m─────────────╮[39m",
+        "[32m│[39medit file.ts        [32m│[39m",
+        "[32m├─[39m output [32m───────────┤[39m",
+        "[32m│[39m-old                [32m│[39m",
+        "[32m│[39m+new                [32m│[39m",
+        "[32m╰────────────────────╯[39m",
+      ]
+    `);
+  });
+
+  it("renders pending write content preview with an output separator", () => {
+    expect(
+      renderFrame(["write file.ts", "", "content"], 22, "tool", "pending", {
+        bodyStartAfter: 1,
+        splitToolOutput: true,
+      }),
+    ).toMatchInlineSnapshot(`
+      [
+        "[90m╭─[39m tool [90m─────────────╮[39m",
+        "[90m│[39mwrite file.ts       [90m│[39m",
+        "[90m├─[39m output [90m───────────┤[39m",
+        "[90m│[39mcontent             [90m│[39m",
+        "[90m╰────────────────────╯[39m",
+      ]
+    `);
+  });
+
+  it("collapses successful read output and keeps the expand hint", () => {
+    expect(
+      renderFrame(["read file", "", "3 lines (ctrl+o to expand)"], 32, "tool", "success", {
+        bodyStartAfter: 1,
+        splitToolOutput: true,
+        collapseToolOutput: true,
+      }),
+    ).toMatchInlineSnapshot(`
+      [
+        "[32m╭─[39m tool [32m───────────────────────╮[39m",
+        "[32m│[39mread file                     [32m│[39m",
+        "[32m╰───────────[39m ctrl+o to expand [32m─╯[39m",
+      ]
+    `);
+  });
+
+  it("collapses successful bash output and keeps the expand hint", () => {
+    const output = renderFrame(["$ pnpm test", "", "12 lines (ctrl+o to expand)"], 34, "tool", "success", {
+      bodyStartAfter: 1,
+      splitToolOutput: true,
+      collapseToolOutput: true,
+    });
+
+    expect(output.some((line) => stripAnsi(line).includes("12 lines"))).toBe(false);
+    expect(output.at(-1)).toContain("ctrl+o to expand");
+  });
+
+  it("shows failed read and bash output", () => {
+    const readOutput = renderFrame(["read file", "", "permission denied"], 24, "tool", "error", {
+      bodyStartAfter: 1,
+      splitToolOutput: true,
+    });
+    const bashOutput = renderFrame(["$ test", "", "exit 1"], 24, "tool", "error", {
+      bodyStartAfter: 1,
+      splitToolOutput: true,
+    });
+
+    expect(readOutput.some((line) => stripAnsi(line).includes("output"))).toBe(true);
+    expect(readOutput.some((line) => stripAnsi(line).includes("permission denied"))).toBe(true);
+    expect(bashOutput.some((line) => stripAnsi(line).includes("output"))).toBe(true);
+    expect(bashOutput.some((line) => stripAnsi(line).includes("exit 1"))).toBe(true);
+  });
+
+  it("shows expanded successful read and bash output exactly as provided", () => {
+    const readOutput = renderFrame(["read file", "", "line 1"], 24, "tool", "success", {
+      bodyStartAfter: 1,
+      splitToolOutput: true,
+      expanded: true,
+    });
+    const bashOutput = renderFrame(["$ echo ok", "", "ok"], 24, "tool", "success", {
+      bodyStartAfter: 1,
+      splitToolOutput: true,
+      expanded: true,
+    });
+
+    expect(readOutput.some((line) => stripAnsi(line).includes("line 1"))).toBe(true);
+    expect(bashOutput.some((line) => stripAnsi(line).includes("ok"))).toBe(true);
+  });
+
+  it("omits the output separator when split output is hidden", () => {
+    expect(
+      renderFrame(["read file", "", "3 lines (ctrl+o to expand)"], 32, "tool", "success", {
+        bodyStartAfter: 1,
+        splitToolOutput: true,
+        collapseToolOutput: true,
+      }),
+    ).toMatchInlineSnapshot(`
+      [
+        "[32m╭─[39m tool [32m───────────────────────╮[39m",
+        "[32m│[39mread file                     [32m│[39m",
+        "[32m╰───────────[39m ctrl+o to expand [32m─╯[39m",
+      ]
+    `);
+  });
+
+  it("preserves ANSI background rows in split tool output", () => {
+    const bg = "\x1b[48;5;24moutput\x1b[49m";
+    const output = renderFrame(["tool call", "", bg], 18, "tool", "success", {
+      bodyStartAfter: 1,
+      splitToolOutput: true,
+    });
+
+    expect(output.some((line) => line.includes("\x1b[48;5;24moutput") && line.includes("\x1b[49m"))).toBe(true);
+    expect(output.some((line) => stripAnsi(line).includes("─ output ") && line.includes("\x1b[48;5;24m"))).toBe(false);
   });
 
   it("pulls bottom-right tool hints from content", () => {
@@ -78,6 +226,19 @@ describe("renderFrame", () => {
         "[32m╰───────────[39m ctrl+o to expand [32m─╯[39m",
       ]
     `);
+  });
+
+  it("hides read image output entirely", () => {
+    const image = "\x1b_Ga=T,f=100,q=2,C=1,c=4,r=2,i=123;AAAA\x1b\\";
+    const output = renderFrame(["read image", "", image, ""], 16, "tool", "success", {
+      bodyStartAfter: 1,
+      splitToolOutput: true,
+      hideToolOutput: true,
+      expanded: true,
+    });
+
+    expect(output.some((line) => line.includes(image))).toBe(false);
+    expect(output.some((line) => stripAnsi(line).includes("output"))).toBe(false);
   });
 
   it("renders Kitty image rows inside tool frames", () => {

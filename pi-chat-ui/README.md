@@ -9,9 +9,10 @@ It preserves Pi's existing renderers by patching their `render(width)` methods, 
 - Adds ASCII/Unicode borders around user messages, skill invocations, custom messages, user bash executions, compaction summaries, branch summaries, and tool executions.
 - Uses different border colors for pending, successful, and failed tool executions.
 - Leaves tool call headers and command output in Pi's original rendered shape inside the outer frame.
-- Moves expand/collapse hints into the bottom-right border.
-- Preserves pending tool placeholders such as `executing...`, `reading...`, and `editing...`.
-- Keeps terminal image escape output outside the frame so image rendering is not broken.
+- Separates visible tool output from command/input rows with an internal `output` separator.
+- Collapses non-error `read` and `bash` output by default while keeping expand/collapse hints in the bottom-right border.
+- Hides `read` image output entirely.
+- Keeps non-hidden terminal image escape output outside the frame so image rendering is not broken.
 - User bash executions keep Pi's built-in bash border; this extension adds an outer chat frame around that block.
 
 ## Runtime flow
@@ -57,7 +58,7 @@ It preserves Pi's existing renderers by patching their `render(width)` methods, 
 
 - `core/tool-adapter.ts`
   - The only module that should inspect Pi's private `ToolExecutionComponent` shape.
-  - Determines tool state, the internal pending-line boundary, and pending-line text.
+  - Determines tool state, tool call/result boundaries, collapse state, expanded state, and read-image-hidden state.
 
 - `core/state.ts`
   - Stores extension-level runtime state on `globalThis`.
@@ -75,7 +76,7 @@ It preserves Pi's existing renderers by patching their `render(width)` methods, 
 - `ui/frame.ts`
   - Main frame renderer.
   - Keeps the public `renderFrame(lines, width, kind, toolState, options)` API.
-  - Converts raw renderer output into semantic `FrameContent`, applies pending-line transformations, and draws borders.
+  - Converts raw renderer output into semantic `FrameContent`, applies tool split/collapse behavior, and draws borders.
   - Border drawing belongs here.
 
 - `ui/frame-model.ts`
@@ -108,7 +109,7 @@ It preserves Pi's existing renderers by patching their `render(width)` methods, 
 - Keep frame cache keying and size limits in `core/render-cache.ts`.
 - Keep private Pi component introspection in `core/tool-adapter.ts`.
 - Keep border drawing in `ui/frame.ts`.
-- New non-tool components should normally behave like user frames; only `tool` should use tool-specific pending-line, hint, and terminal-image behavior.
+- New non-tool components should normally behave like user frames; only `tool` should use tool-specific split/collapse, hint, and terminal-image behavior.
 - Keep ANSI/OSC manipulation in `ui/ansi.ts`.
 - Keep terminal image handling in `ui/terminal-images.ts`.
 - Keep hint extraction in `ui/hints.ts`.
@@ -136,7 +137,9 @@ For rendering-sensitive changes, also reload Pi and manually check:
 - skill invocation frame rendering
 - custom message, user bash, compaction summary, and branch summary frame rendering
 - tool call headers keep their original rendered shape
-- pending tool placeholder text
+- pending `read` and `bash` show command/input only
 - success and error tool border colors
-- expand/collapse hint in the bottom-right border
-- image read output rendered outside the frame
+- collapsed `read` and `bash` keep the expand hint in the bottom-right border
+- expanded `read` and `bash` show output
+- failed `read` and `bash` show output/error
+- image read output is hidden

@@ -1,6 +1,6 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { FrameKind, ToolState } from "../core/types";
-import type { FrameContent } from "./frame-model";
+import type { FrameContent, ToolFrameOptions } from "./frame-model";
 import {
   insertBeforeTrailingAnsi,
   OSC133_ZONE_END,
@@ -16,13 +16,9 @@ import {
   isTerminalImageLine,
   splitTerminalImageRows,
 } from "./terminal-images";
-import { dimColor, frameColor, labelColor } from "./theme";
+import { frameColor, labelColor } from "./theme";
 
-export interface FrameOptions {
-  bodyStartAfter?: number;
-  pendingLine?: string;
-  pendingLineMode?: "replace" | "prepend";
-}
+export type FrameOptions = ToolFrameOptions;
 
 function splitLeadingBlank(lines: string[]): {
   leading: string[];
@@ -125,44 +121,12 @@ function adjustBodyStartAfter(
   return Math.max(1, bodyStartAfter - removedLeadingLines);
 }
 
-function applyPendingLine(content: FrameContent, innerWidth: number): FrameContent {
-  const { pendingLine, pendingLineMode, bodyStartAfter } = content;
-  if (!pendingLine || bodyStartAfter === undefined || bodyStartAfter <= 0) return content;
-
-  const before = content.textBody.slice(0, bodyStartAfter);
-  const after = content.textBody.slice(bodyStartAfter);
-  const pending = padLine(pendingLine, innerWidth);
-  const textBody = pendingLineMode === "replace"
-    ? [...before, pending]
-    : after.length > 0 && stripAnsi(after[0] ?? "").trim() === ""
-      ? [...before, pending, ...after.slice(1)]
-      : [...before, pending, ...after];
-
-  return { ...content, textBody };
-}
-
-function applyCollapsedContentPlaceholder(
-  content: FrameContent,
-  innerWidth: number,
-): FrameContent {
-  const { bottomRightHint, bodyStartAfter } = content;
-  if (!bottomRightHint || bodyStartAfter === undefined || bodyStartAfter <= 0) return content;
-
-  const before = content.textBody.slice(0, bodyStartAfter);
-  const after = content.textBody.slice(bodyStartAfter);
-  if (after.some((line) => stripAnsi(line).trim() !== "")) return content;
-
-  const paddingLine = " ".repeat(innerWidth);
-  const placeholderText = dimColor(" content is collapsed by default...");
-  const placeholder = padLine(placeholderText, innerWidth);
-
-  return {
-    ...content,
-    textBody: [...before, paddingLine, placeholder],
-  };
-}
-
-function normalizeFrameContent(lines: string[], kind: FrameKind, options: FrameOptions): FrameContent | undefined {
+function normalizeFrameContent(
+  lines: string[],
+  kind: FrameKind,
+  toolState: ToolState,
+  options: FrameOptions,
+): FrameContent | undefined {
   const normalizedLines = kind === "bash" ? stripBashBuiltInBorders(lines) : lines;
   const { leading, body } = splitLeadingBlank(normalizedLines);
   if (body.length === 0) return undefined;
@@ -180,9 +144,10 @@ function normalizeFrameContent(lines: string[], kind: FrameKind, options: FrameO
     ? splitTerminalImageRows(cleanBody)
     : { textLines: cleanBody, imageRows: [] };
   const topTrim = kind === "tool" ? trimLeadingBlankLines(textLines) : { lines: textLines, removed: 0 };
-  const shouldPullHint = kind === "tool" && options.pendingLineMode !== "replace";
+  const shouldPullHint = kind === "tool";
   const pulledHint = shouldPullHint ? pullToolHintFromLines(topTrim.lines) : { lines: topTrim.lines };
-  const textBody = pulledHint.bottomRight ? trimTrailingBlankLines(pulledHint.lines) : pulledHint.lines;
+  const hintedTextBody = pulledHint.bottomRight ? trimTrailingBlankLines(pulledHint.lines) : pulledHint.lines;
+  const textBody = kind === "tool" && toolState === "pending" ? trimTrailingBlankLines(hintedTextBody) : hintedTextBody;
 
   return {
     leadingBlankLines: leading,
@@ -191,8 +156,10 @@ function normalizeFrameContent(lines: string[], kind: FrameKind, options: FrameO
     oscStart,
     oscEnd,
     bodyStartAfter: adjustBodyStartAfter(options.bodyStartAfter, topTrim.removed),
-    ...(options.pendingLine ? { pendingLine: options.pendingLine } : {}),
-    ...(options.pendingLineMode ? { pendingLineMode: options.pendingLineMode } : {}),
+    ...(options.splitToolOutput ? { splitToolOutput: options.splitToolOutput } : {}),
+    ...(options.collapseToolOutput ? { collapseToolOutput: options.collapseToolOutput } : {}),
+    ...(options.hideToolOutput ? { hideToolOutput: options.hideToolOutput } : {}),
+    ...(options.trimToolOutputTrailingBlanks ? { trimToolOutputTrailingBlanks: options.trimToolOutputTrailingBlanks } : {}),
     ...(pulledHint.bottomRight ? { bottomRightHint: pulledHint.bottomRight } : {}),
   };
 }
@@ -217,19 +184,74 @@ function renderInsideFrameImageRows(
   });
 }
 
+function hasVisibleText(lines: string[]): boolean {
+  return lines.some((line) => stripAnsi(line).trim() !== "");
+}
+
+function trimBoundaryBlank(lines: string[]): string[] {
+  if (stripAnsi(lines[0] ?? "").trim() !== "") return lines;
+  return lines.slice(1);
+}
+
+function splitToolTextBody(content: FrameContent): { callRows: string[]; resultRows: string[] } {
+  if (!content.splitToolOutput || content.bodyStartAfter === undefined || content.bodyStartAfter <= 0) {
+    return { callRows: content.textBody, resultRows: [] };
+  }
+
+  const resultRows = trimBoundaryBlank(content.textBody.slice(content.bodyStartAfter));
+  return {
+    callRows: content.textBody.slice(0, content.bodyStartAfter),
+    resultRows: content.trimToolOutputTrailingBlanks ? trimTrailingBlankLines(resultRows) : resultRows,
+  };
+}
+
+function renderBodyRows(lines: string[], innerWidth: number, kind: FrameKind, toolState: ToolState): string[] {
+  return lines.map(
+    (line) => frameColor(kind, "│", toolState) + padLine(line, innerWidth) + frameColor(kind, "│", toolState),
+  );
+}
+
+function outputSeparator(innerWidth: number, kind: FrameKind, toolState: ToolState): string {
+  const titleText = " output ";
+  const title = labelColor(kind, titleText);
+  const titleWidth = visibleWidth(titleText);
+  if (innerWidth <= titleWidth + 1) {
+    return frameColor(kind, "├", toolState) + labelColor(kind, truncateToWidth(`─${titleText}`, innerWidth, "")) + frameColor(kind, "┤", toolState);
+  }
+
+  const fill = Math.max(0, innerWidth - titleWidth - 1);
+  return (
+    frameColor(kind, "├─", toolState) +
+    title +
+    frameColor(kind, `${"─".repeat(fill)}┤`, toolState)
+  );
+}
+
 function renderFrameContent(
   content: FrameContent,
   innerWidth: number,
   kind: FrameKind,
   toolState: ToolState,
 ): string[] {
-  const shouldRenderImagesInsideFrame = canRenderTerminalImageRowsInsideFrame(content.terminalImageRows);
+  const outputHidden = content.hideToolOutput || content.collapseToolOutput;
+  const imageRows = outputHidden ? [] : content.terminalImageRows;
+  const shouldRenderImagesInsideFrame = canRenderTerminalImageRowsInsideFrame(imageRows);
   const insideFrameImageRows = shouldRenderImagesInsideFrame
-    ? renderInsideFrameImageRows(content.terminalImageRows, innerWidth, kind, toolState)
+    ? renderInsideFrameImageRows(imageRows, innerWidth, kind, toolState)
     : [];
-  const outsideFrameImageRows = shouldRenderImagesInsideFrame ? [] : indentTerminalImageRows(content.terminalImageRows);
+  const outsideFrameImageRows = shouldRenderImagesInsideFrame ? [] : indentTerminalImageRows(imageRows);
+  const { callRows, resultRows } = kind === "tool" ? splitToolTextBody(content) : { callRows: content.textBody, resultRows: [] };
+  const visibleResultRows = outputHidden ? [] : resultRows;
+  const hasVisibleOutput = hasVisibleText(visibleResultRows) || imageRows.length > 0;
+  const renderedTextRows = kind === "tool" && content.splitToolOutput
+    ? [
+      ...renderBodyRows(callRows, innerWidth, kind, toolState),
+      ...(hasVisibleOutput ? [outputSeparator(innerWidth, kind, toolState)] : []),
+      ...renderBodyRows(visibleResultRows, innerWidth, kind, toolState),
+    ]
+    : renderBodyRows(content.textBody, innerWidth, kind, toolState);
 
-  if (content.textBody.length === 0) {
+  if (renderedTextRows.length === 0) {
     return [
       ...content.leadingBlankLines,
       (content.oscStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
@@ -239,18 +261,12 @@ function renderFrameContent(
     ];
   }
 
-  const pendingContent = applyPendingLine(content, innerWidth);
-  const placeholderContent = applyCollapsedContentPlaceholder(pendingContent, innerWidth);
-  const wrapped = placeholderContent.textBody.map(
-    (line) => frameColor(kind, "│", toolState) + padLine(line, innerWidth) + frameColor(kind, "│", toolState),
-  );
-
   return [
-    ...placeholderContent.leadingBlankLines,
-    (placeholderContent.oscStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
-    ...wrapped,
+    ...content.leadingBlankLines,
+    (content.oscStart ? OSC133_ZONE_START : "") + topBorder(kind, innerWidth, toolState),
+    ...renderedTextRows,
     ...insideFrameImageRows,
-    (placeholderContent.oscEnd ? OSC133_ZONE_END + OSC133_ZONE_FINAL : "") + bottomBorder(kind, innerWidth, toolState, placeholderContent.bottomRightHint),
+    (content.oscEnd ? OSC133_ZONE_END + OSC133_ZONE_FINAL : "") + bottomBorder(kind, innerWidth, toolState, content.bottomRightHint),
     ...outsideFrameImageRows,
   ];
 }
@@ -264,7 +280,7 @@ export function renderFrame(
 ): string[] {
   if (width < 4 || lines.length === 0) return lines;
 
-  const content = normalizeFrameContent(lines, kind, options);
+  const content = normalizeFrameContent(lines, kind, toolState, options);
   if (!content) return lines;
 
   return renderFrameContent(content, width - 2, kind, toolState);

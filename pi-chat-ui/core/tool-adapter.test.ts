@@ -33,8 +33,7 @@ describe("getToolFrameOptions", () => {
     ).toMatchInlineSnapshot(`
       {
         "bodyStartAfter": 1,
-        "pendingLine": "[2m executing...[22m",
-        "pendingLineMode": "replace",
+        "collapseToolOutput": true,
       }
     `);
   });
@@ -55,8 +54,7 @@ describe("getToolFrameOptions", () => {
     ).toMatchInlineSnapshot(`
       {
         "bodyStartAfter": 1,
-        "pendingLine": "[2m executing...[22m",
-        "pendingLineMode": "replace",
+        "collapseToolOutput": true,
       }
     `);
     expect(render).not.toHaveBeenCalled();
@@ -75,8 +73,7 @@ describe("getToolFrameOptions", () => {
     ).toMatchInlineSnapshot(`
       {
         "bodyStartAfter": 2,
-        "pendingLine": "[2m reading...[22m",
-        "pendingLineMode": "replace",
+        "collapseToolOutput": true,
       }
     `);
   });
@@ -97,8 +94,7 @@ describe("getToolFrameOptions", () => {
     ).toMatchInlineSnapshot(`
       {
         "bodyStartAfter": 2,
-        "pendingLine": "\u001b[2m editing...\u001b[22m",
-        "pendingLineMode": "replace",
+        "trimToolOutputTrailingBlanks": true,
       }
     `);
     expect(render).not.toHaveBeenCalled();
@@ -114,5 +110,106 @@ describe("getToolFrameOptions", () => {
         "success",
       ),
     ).toEqual({ bodyStartAfter: 2 });
+  });
+
+  it("marks edit output trailing blanks for trimming", () => {
+    expect(
+      getToolFrameOptions(
+        component([], {
+          toolName: "edit",
+          callRendererComponent: component([]),
+          resultRendererComponent: component([]),
+        }),
+        ["edit file.ts", "", "-old", "+new", ""],
+        "success",
+      ),
+    ).toMatchObject({ trimToolOutputTrailingBlanks: true });
+  });
+
+  it("marks pending write content previews as split output", () => {
+    expect(
+      getToolFrameOptions(
+        component([], {
+          toolName: "write",
+          callRendererComponent: component([]),
+        }),
+        ["write file.ts", "", "content"],
+        "pending",
+      ),
+    ).toMatchObject({ bodyStartAfter: 1, splitToolOutput: true });
+  });
+
+  it("marks tool output as split when call and result components are available", () => {
+    expect(
+      getToolFrameOptions(
+        component([], {
+          toolName: "write",
+          callRendererComponent: component([]),
+          resultRendererComponent: component([]),
+        }),
+        ["write", "file.ts", "", "done"],
+        "success",
+      ),
+    ).toMatchObject({ bodyStartAfter: 2, splitToolOutput: true });
+  });
+
+  it("collapses pending partial read and bash output", () => {
+    expect(
+      getToolFrameOptions(
+        component([], { toolName: "read", result: { content: [{ type: "text" }] }, isPartial: true }),
+        ["read file", "", "partial"],
+        "pending",
+      ),
+    ).toMatchObject({ collapseToolOutput: true });
+
+    expect(
+      getToolFrameOptions(
+        component([], { toolName: "bash", result: { content: [{ type: "text" }] }, isPartial: true }),
+        ["$ long command", "", "partial"],
+        "pending",
+      ),
+    ).toMatchObject({ collapseToolOutput: true });
+  });
+
+  it("collapses successful read and bash output until expanded", () => {
+    expect(
+      getToolFrameOptions(component([], { toolName: "read" }), ["read file", "", "contents"], "success"),
+    ).toMatchObject({ collapseToolOutput: true });
+
+    expect(
+      getToolFrameOptions(component([], { toolName: "bash" }), ["$ test", "", "done"], "success"),
+    ).toMatchObject({ collapseToolOutput: true });
+
+    expect(
+      getToolFrameOptions(component([], { toolName: "read", expanded: true }), ["read file", "", "contents"], "success"),
+    ).not.toHaveProperty("collapseToolOutput");
+
+    expect(
+      getToolFrameOptions(component([], { toolName: "bash", expanded: true }), ["$ test", "", "done"], "success"),
+    ).not.toHaveProperty("collapseToolOutput");
+  });
+
+  it("keeps failed read and bash output visible", () => {
+    expect(
+      getToolFrameOptions(component([], { toolName: "read", result: { isError: true } }), ["read file", "", "failed"], "error"),
+    ).not.toHaveProperty("collapseToolOutput");
+
+    expect(
+      getToolFrameOptions(component([], { toolName: "bash", result: { isError: true } }), ["$ test", "", "failed"], "error"),
+    ).not.toHaveProperty("collapseToolOutput");
+  });
+
+  it("marks read image output as hidden from result content or rendered image rows", () => {
+    expect(
+      getToolFrameOptions(
+        component([], { toolName: "read", result: { content: [{ type: "image" }] } }),
+        ["read image"],
+        "success",
+      ),
+    ).toMatchObject({ hideToolOutput: true });
+
+    expect(
+      getToolFrameOptions(component([], { toolName: "read" }), ["read image", "\x1b_Gimage-data"], "success"),
+    ).toMatchObject({ hideToolOutput: true });
   });
 });
