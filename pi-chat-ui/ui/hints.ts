@@ -11,6 +11,11 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+export function fallbackExpandHint(): string | undefined {
+  const expandKey = keyText("app.tools.expand");
+  return expandKey ? `${expandKey} to expand` : undefined;
+}
+
 export function pullToolHintFromLines(lines: string[]): ToolHintResult {
   const expandKey = keyText("app.tools.expand");
   if (!expandKey) return { lines };

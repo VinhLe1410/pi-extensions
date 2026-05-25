@@ -9,7 +9,7 @@ import {
   stripAnsi,
   stripOscMarkers,
 } from "./ansi";
-import { pullToolHintFromLines } from "./hints";
+import { fallbackExpandHint, pullToolHintFromLines } from "./hints";
 import {
   canRenderTerminalImageRowsInsideFrame,
   indentTerminalImageRows,
@@ -148,6 +148,7 @@ function normalizeFrameContent(
   const pulledHint = shouldPullHint ? pullToolHintFromLines(topTrim.lines) : { lines: topTrim.lines };
   const hintedTextBody = pulledHint.bottomRight ? trimTrailingBlankLines(pulledHint.lines) : pulledHint.lines;
   const textBody = kind === "tool" && toolState === "pending" ? trimTrailingBlankLines(hintedTextBody) : hintedTextBody;
+  const bottomRightHint = pulledHint.bottomRight ?? (options.fallbackCollapsedHint ? fallbackExpandHint() : undefined);
 
   return {
     leadingBlankLines: leading,
@@ -160,7 +161,8 @@ function normalizeFrameContent(
     ...(options.collapseToolOutput ? { collapseToolOutput: options.collapseToolOutput } : {}),
     ...(options.hideToolOutput ? { hideToolOutput: options.hideToolOutput } : {}),
     ...(options.trimToolOutputTrailingBlanks ? { trimToolOutputTrailingBlanks: options.trimToolOutputTrailingBlanks } : {}),
-    ...(pulledHint.bottomRight ? { bottomRightHint: pulledHint.bottomRight } : {}),
+    ...(options.fallbackCollapsedHint ? { fallbackCollapsedHint: options.fallbackCollapsedHint } : {}),
+    ...(bottomRightHint ? { bottomRightHint } : {}),
   };
 }
 

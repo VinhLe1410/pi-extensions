@@ -149,10 +149,31 @@ describe("renderFrame", () => {
       bodyStartAfter: 1,
       splitToolOutput: true,
       collapseToolOutput: true,
+      fallbackCollapsedHint: true,
     });
 
     expect(output.some((line) => stripAnsi(line).includes("12 lines"))).toBe(false);
     expect(output.at(-1)).toContain("ctrl+o to expand");
+  });
+
+  it("shows a fallback expand hint when collapsed output has no built-in hint", () => {
+    const bashOutput = renderFrame(["$ echo ok", "", "ok"], 34, "tool", "success", {
+      bodyStartAfter: 1,
+      splitToolOutput: true,
+      collapseToolOutput: true,
+      fallbackCollapsedHint: true,
+    });
+    const readOutput = renderFrame(["read file", "", "contents"], 34, "tool", "success", {
+      bodyStartAfter: 1,
+      splitToolOutput: true,
+      collapseToolOutput: true,
+      fallbackCollapsedHint: true,
+    });
+
+    expect(bashOutput.some((line) => stripAnsi(line).includes("│ok"))).toBe(false);
+    expect(bashOutput.at(-1)).toContain("ctrl+o to expand");
+    expect(readOutput.some((line) => stripAnsi(line).includes("contents"))).toBe(false);
+    expect(readOutput.at(-1)).toContain("ctrl+o to expand");
   });
 
   it("shows failed read and bash output", () => {

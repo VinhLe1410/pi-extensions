@@ -98,6 +98,7 @@ function toolFrameOptionsKey(request: FrameCacheRequest): string {
     flagKey(request.collapseToolOutput),
     flagKey(request.hideToolOutput),
     flagKey(request.trimToolOutputTrailingBlanks),
+    flagKey(request.fallbackCollapsedHint),
     flagKey(request.expanded),
   ].join("\n");
 }

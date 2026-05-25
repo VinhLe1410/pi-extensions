@@ -198,6 +198,22 @@ describe("frame render cache", () => {
     expect(getCachedFrameRows({ ...request, trimToolOutputTrailingBlanks: true })).toBeUndefined();
   });
 
+  it("misses when fallback collapsed hint changes", () => {
+    const owner = component({ toolName: "bash" });
+    const request = {
+      component: owner,
+      width: 20,
+      kind: "tool" as const,
+      toolState: "success" as const,
+      rendered: ["$ echo ok", "", "ok"],
+      fallbackCollapsedHint: false,
+    };
+
+    setCachedFrameRows(request, ["framed bash"]);
+
+    expect(getCachedFrameRows({ ...request, fallbackCollapsedHint: true })).toBeUndefined();
+  });
+
   it("misses when read image output is hidden", () => {
     const owner = component({ toolName: "read" });
     const request = {

@@ -4,6 +4,7 @@ export interface ToolFrameRenderingOptions {
   collapseToolOutput?: boolean;
   hideToolOutput?: boolean;
   trimToolOutputTrailingBlanks?: boolean;
+  fallbackCollapsedHint?: boolean;
 }
 
 export interface ToolFrameOptions extends ToolFrameRenderingOptions {

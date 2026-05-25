@@ -95,6 +95,7 @@ export function getToolFrameOptions(
   const splitToolOutput = shouldSplitToolOutput(tool, renderedLines, bodyStartAfter);
   const collapseToolOutput = shouldCollapseToolOutput(tool, toolState);
   const hideToolOutput = hasReadImageOutput(tool, renderedLines);
+  const fallbackCollapsedHint = collapseToolOutput && !hideToolOutput;
   const trimToolOutputTrailingBlanks = tool.toolName === "edit";
   const expanded = Boolean(tool.expanded);
 
@@ -103,6 +104,7 @@ export function getToolFrameOptions(
     ...(splitToolOutput ? { splitToolOutput } : {}),
     ...(collapseToolOutput ? { collapseToolOutput } : {}),
     ...(hideToolOutput ? { hideToolOutput } : {}),
+    ...(fallbackCollapsedHint ? { fallbackCollapsedHint } : {}),
     ...(trimToolOutputTrailingBlanks ? { trimToolOutputTrailingBlanks } : {}),
     ...(expanded ? { expanded } : {}),
   };

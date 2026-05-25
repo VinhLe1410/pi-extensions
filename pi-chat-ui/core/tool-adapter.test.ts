@@ -34,6 +34,7 @@ describe("getToolFrameOptions", () => {
       {
         "bodyStartAfter": 1,
         "collapseToolOutput": true,
+        "fallbackCollapsedHint": true,
       }
     `);
   });
@@ -55,6 +56,7 @@ describe("getToolFrameOptions", () => {
       {
         "bodyStartAfter": 1,
         "collapseToolOutput": true,
+        "fallbackCollapsedHint": true,
       }
     `);
     expect(render).not.toHaveBeenCalled();
@@ -74,6 +76,7 @@ describe("getToolFrameOptions", () => {
       {
         "bodyStartAfter": 2,
         "collapseToolOutput": true,
+        "fallbackCollapsedHint": true,
       }
     `);
   });
