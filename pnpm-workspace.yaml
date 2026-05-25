@@ -5,6 +5,7 @@ packages:
   - pi-whimsical
   - pi-chat-ui
   - pi-git-commit
+  - pi-subagents
 allowBuilds:
   "@google/genai": true
   koffi: true
