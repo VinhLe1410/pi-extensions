@@ -16,7 +16,7 @@ import type { RunningSubagent, SubagentParamsInput, SubagentResult } from "../ty
 import { asSubagentToolResult, getCoordinatorOnlyTurnPrompt, getSubagentBatchStopMetadata, markSubagentBatchBlocking } from "../runtime/state.ts";
 
 import { isSetTabTitleToolEnabled } from "../agents/titles.ts";
-import { formatSubagentBatchLines, formatTaskPreview, renderSubagentCompletionText } from "./message-renderers.ts";
+import { formatSubagentBatchLines, renderSubagentCompletionText } from "./message-renderers.ts";
 import { getSubagentToolsConfigError } from "./policy.ts";
 import {
 	SET_TAB_TITLE_TOOL_NAME,
@@ -324,19 +324,16 @@ export function registerSubagentCoreTools(
 			const text = context.lastComponent instanceof Text ? context.lastComponent : new Text("", 0, 0);
 			const children = Array.isArray(args.children) ? args.children : undefined;
 			if (children?.length) {
-				const lines = [`▸ ${theme.fg("toolTitle", theme.bold("Spawn"))} ${theme.fg("toolTitle", theme.bold(`${children.length} agents`))}`, ""];
-				children.forEach((child, index) => {
-					if (index > 0) lines.push("");
+				const lines = [`▸ ${theme.fg("toolTitle", theme.bold("Spawn"))} ${theme.fg("toolTitle", theme.bold(`${children.length} agents`))}`];
+				children.forEach((child) => {
 					const agent = child.agent ? theme.fg("dim", ` (${child.agent})`) : "";
 					lines.push(`${theme.fg("accent", theme.bold(child.name ?? "subagent"))}${agent}`);
-					const taskPreview = formatTaskPreview(child.task, context, theme).replace(/^\n/, "");
-					if (taskPreview) lines.push(taskPreview);
 				});
 				text.setText(lines.join("\n"));
 				return text;
 			}
 			const agent = args.agent ? theme.fg("dim", ` (${args.agent})`) : "";
-			text.setText("▸ " + theme.fg("toolTitle", theme.bold("Spawn")) + " " + theme.fg("accent", theme.bold(args.name ?? "subagent")) + agent + formatTaskPreview(args.task, context, theme));
+			text.setText("▸ " + theme.fg("toolTitle", theme.bold("Spawn")) + " " + theme.fg("accent", theme.bold(args.name ?? "subagent")) + agent);
 			return text;
 		},
 		renderResult(result, options, theme, context) {

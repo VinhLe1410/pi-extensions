@@ -55,6 +55,14 @@ function trimTrailingBlankLines(lines: string[]): string[] {
   return lines.slice(0, end);
 }
 
+function trimUserBoundaryPadding(lines: string[]): string[] {
+  let start = 0;
+  let end = lines.length;
+  if (stripAnsi(lines[start] ?? "").trim() === "") start++;
+  if (end > start && stripAnsi(lines[end - 1] ?? "").trim() === "") end--;
+  return lines.slice(start, end);
+}
+
 function isBashBuiltInBorderLine(line: string): boolean {
   const text = stripAnsi(line).trim();
   return text.length > 0 && /^─+$/.test(text);
@@ -128,7 +136,9 @@ function normalizeFrameContent(
   options: FrameOptions,
 ): FrameContent | undefined {
   const normalizedLines = kind === "bash" ? stripBashBuiltInBorders(lines) : lines;
-  const { leading, body } = splitLeadingBlank(normalizedLines);
+  const { leading, body } = kind === "user"
+    ? { leading: [], body: normalizedLines }
+    : splitLeadingBlank(normalizedLines);
   if (body.length === 0) return undefined;
 
   let oscStart = false;
@@ -140,9 +150,12 @@ function normalizeFrameContent(
     return stripped.line;
   });
 
+  const bodyWithoutUserPadding = kind === "user" ? trimUserBoundaryPadding(cleanBody) : cleanBody;
+  if (bodyWithoutUserPadding.length === 0) return undefined;
+
   const { textLines, imageRows } = kind === "tool"
-    ? splitTerminalImageRows(cleanBody)
-    : { textLines: cleanBody, imageRows: [] };
+    ? splitTerminalImageRows(bodyWithoutUserPadding)
+    : { textLines: bodyWithoutUserPadding, imageRows: [] };
   const topTrim = kind === "tool" ? trimLeadingBlankLines(textLines) : { lines: textLines, removed: 0 };
   const shouldPullHint = kind === "tool";
   const pulledHint = shouldPullHint ? pullToolHintFromLines(topTrim.lines) : { lines: topTrim.lines };

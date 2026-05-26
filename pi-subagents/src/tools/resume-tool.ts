@@ -13,10 +13,7 @@ import {
 } from "../runtime/state.ts";
 import { shouldAwaitSubagentLaunch } from "../runtime/running-registry.ts";
 import { SUBAGENT_RESUME_TOOL_NAME } from "./tool-names.ts";
-import {
-	formatTaskPreview,
-	renderSubagentCompletionText,
-} from "./message-renderers.ts";
+import { renderSubagentCompletionText } from "./message-renderers.ts";
 
 export interface ResumeToolRuntime extends ResumeServiceRuntime {
 	wireSubagentSteerBack(
@@ -108,8 +105,7 @@ export function registerSubagentResumeTool(
 					theme.fg("toolTitle", theme.bold("Resume")) +
 					" " +
 					theme.fg("accent", theme.bold(name)) +
-					agentBadge +
-					formatTaskPreview(args.task ?? "", context, theme),
+					agentBadge,
 			);
 			return text;
 		},

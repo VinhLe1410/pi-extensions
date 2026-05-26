@@ -19,6 +19,16 @@ describe("renderFrame", () => {
     `);
   });
 
+  it("trims built-in user message boundary padding", () => {
+    expect(renderFrame(["", "hello", ""], 12, "user")).toMatchInlineSnapshot(`
+      [
+        "[90m╭─[39m user [90m───╮[39m",
+        "[90m│[39mhello     [90m│[39m",
+        "[90m╰──────────╯[39m",
+      ]
+    `);
+  });
+
   it("renders tool frames without inner separators", () => {
     expect(
       renderFrame(["read file", "", "contents"], 16, "tool", "success", { bodyStartAfter: 1 }),

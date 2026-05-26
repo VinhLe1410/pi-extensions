@@ -3,6 +3,7 @@ import "./session/exit-sidecar.test.ts";
 
 import "./tools/subagent-done.test.ts";
 import "./tools/message-renderers.test.ts";
+import "./tools/tool-render-call.test.ts";
 import "./artifacts/storage.test.ts";
 import "./launch/config.test.ts";
 import "./agents/definitions-agent-list.test.ts";
