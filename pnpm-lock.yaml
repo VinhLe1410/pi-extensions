@@ -29,8 +29,6 @@ importers:
 
   pi-chat-ui: {}
 
-  pi-codex-fast: {}
-
   pi-git-commit: {}
 
   pi-prompt-ui: {}

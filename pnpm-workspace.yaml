@@ -1,6 +1,5 @@
 packages:
   - pi-prompt-ui
-  - pi-codex-fast
   - pi-usage-stats
   - pi-whimsical
   - pi-chat-ui

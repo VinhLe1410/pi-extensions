@@ -25,12 +25,11 @@ describe("renderBorderLine", () => {
     expect(stripAnsi(output)).toContain("plain");
   });
 
-  it("drops top-like usage items before higher-priority model, thinking, and fast items", () => {
+  it("drops top-like usage items before higher-priority model and thinking items", () => {
     const line: BorderLine = {
       left: [
         { id: "model", text: "model", priority: 50 },
         { id: "thinking", text: "thinking", priority: 40 },
-        { id: "fast", text: "fast", priority: 30 },
       ],
       right: [
         { id: "session", text: "session", priority: 20 },
@@ -41,21 +40,14 @@ describe("renderBorderLine", () => {
     const withoutWeekly = stripAnsi(render(40, line));
     expect(withoutWeekly).toContain("model");
     expect(withoutWeekly).toContain("thinking");
-    expect(withoutWeekly).toContain("fast");
     expect(withoutWeekly).toContain("session");
     expect(withoutWeekly).not.toContain("weekly");
 
-    const withoutUsage = stripAnsi(render(32, line));
+    const withoutUsage = stripAnsi(render(31, line));
     expect(withoutUsage).toContain("model");
     expect(withoutUsage).toContain("thinking");
-    expect(withoutUsage).toContain("fast");
     expect(withoutUsage).not.toContain("session");
     expect(withoutUsage).not.toContain("weekly");
-
-    const withoutFast = stripAnsi(render(25, line));
-    expect(withoutFast).toContain("model");
-    expect(withoutFast).toContain("thinking");
-    expect(withoutFast).not.toContain("fast");
   });
 
   it("drops bottom-like cwd before context before branch", () => {

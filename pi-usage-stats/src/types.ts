@@ -25,39 +25,9 @@ export interface TotalStats extends BaseStats {
   sessions: number;
 }
 
-export interface Insight {
-  percent: number;
-  headline: string;
-  advice: string;
-}
-
-export interface PeriodInsights {
-  insights: Insight[];
-}
-
-export interface RawMessage {
-  sessionId: string;
-  timestamp: number;
-  cost: number;
-  input: number;
-  cacheRead: number;
-  cacheWrite: number;
-}
-
-export interface PeriodRawData {
-  messages: RawMessage[];
-  sessionCosts: Map<string, number>;
-}
-
-export interface GlobalSessionSpan {
-  startMs: number;
-  endMs: number;
-}
-
 export interface TimeFilteredStats {
   providers: Map<string, ProviderStats>;
   totals: TotalStats;
-  insights: PeriodInsights;
   tokenBuckets: number[];
 }
 
@@ -69,7 +39,6 @@ export interface UsageData {
 }
 
 export type TabName = "today" | "thisWeek" | "thisMonth" | "allTime";
-export type ViewMode = "table" | "insights";
 
 export interface DataColumn {
   label: string;

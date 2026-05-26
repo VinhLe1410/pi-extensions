@@ -83,13 +83,3 @@ export function pickFittingText(width: number, variants: string[]): string {
   return variants[variants.length - 1] || "";
 }
 
-export function formatThresholdTokens(n: number): string {
-  if (n >= 1_000_000) return `${n / 1_000_000}M`;
-  if (n >= 1_000) return `${n / 1_000}k`;
-  return String(n);
-}
-
-export function formatInsightPercent(p: number): string {
-  if (p >= 10) return `${Math.round(p)}%`;
-  return `${Math.round(p * 10) / 10}%`;
-}

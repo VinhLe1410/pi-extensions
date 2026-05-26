@@ -1,7 +1,7 @@
 import type { DataColumn, TableLayout, TableLayoutCandidate } from "./types";
 import { formatCost, formatNumber, formatTokens } from "./formatting";
 
-export const MAX_NAME_COL_WIDTH = 26;
+export const MAX_NAME_COL_WIDTH = 34;
 
 const SESSIONS_COLUMN: DataColumn = {
   label: "Sessions",
@@ -66,16 +66,16 @@ const TABLE_LAYOUTS: TableLayoutCandidate[] = [
   { columns: FULL_DATA_COLUMNS, minNameWidth: MAX_NAME_COL_WIDTH },
   {
     columns: [SESSIONS_COLUMN, MSGS_COLUMN, COST_COLUMN, TOKENS_COLUMN],
-    minNameWidth: 14,
+    minNameWidth: 18,
     compact: true,
   },
   {
     columns: [SESSIONS_COLUMN, COST_COLUMN, TOKENS_COLUMN],
-    minNameWidth: 12,
+    minNameWidth: 16,
     compact: true,
   },
-  { columns: [COST_COLUMN, TOKENS_COLUMN], minNameWidth: 10, compact: true },
-  { columns: [COST_COLUMN], minNameWidth: 8, compact: true },
+  { columns: [COST_COLUMN, TOKENS_COLUMN], minNameWidth: 14, compact: true },
+  { columns: [COST_COLUMN], minNameWidth: 12, compact: true },
 ];
 
 function sumColumnWidths(columns: DataColumn[]): number {

@@ -7,22 +7,33 @@ import {
 } from "@earendil-works/pi-tui";
 import { TAB_LABELS, TAB_ORDER } from "./constants";
 import {
-  centerBlock,
   centerLine,
   clampLines,
   fitCell,
-  formatInsightPercent,
   formatTokens,
   padLeft,
   padRight,
   pickFittingText,
 } from "./formatting";
 import { getTableLayout } from "./table-layout";
-import type { BaseStats, TabName, TableLayout, UsageData, ViewMode } from "./types";
+import type {
+  BaseStats,
+  ModelStats,
+  TabName,
+  TableLayout,
+  UsageData,
+} from "./types";
 
 const GRAPH_HEIGHT = 8;
 const GRAPH_CELL_WIDTH = 2;
 const GRAPH_LABEL_HANG_WIDTH = 4;
+const FALLBACK_CONTENT_ROWS = 30;
+const MAX_TABLE_ROWS = 16;
+
+interface ModelRow {
+  label: string;
+  stats: ModelStats;
+}
 
 function alignGraphLine(line: string, width: number): string {
   const lineWidth = visibleWidth(line);
@@ -31,7 +42,9 @@ function alignGraphLine(line: string, width: number): string {
   const maxPaddingWithoutClipping = Math.max(0, width - lineWidth);
   const padding = Math.min(desiredPadding, maxPaddingWithoutClipping);
 
-  return " ".repeat(padding) + truncateToWidth(line, Math.max(0, width - padding));
+  return (
+    " ".repeat(padding) + truncateToWidth(line, Math.max(0, width - padding))
+  );
 }
 
 function niceScaleStep(value: number): number {
@@ -47,38 +60,27 @@ function niceScaleStep(value: number): number {
 }
 
 export class UsageComponent {
-  private activeTab: TabName = "allTime";
-  private viewMode: ViewMode = "table";
+  private activeTab: TabName = "thisMonth";
   private data: UsageData;
   private selectedIndex = 0;
-  private expanded = new Set<string>();
-  private providerOrder: string[] = [];
+  private tableScroll = 0;
   private theme: Theme;
+  private getTerminalRows: () => number | undefined;
   private requestRender: () => void;
   private done: () => void;
 
   constructor(
     theme: Theme,
     data: UsageData,
+    getTerminalRows: () => number | undefined,
     requestRender: () => void,
     done: () => void,
   ) {
     this.theme = theme;
+    this.data = data;
+    this.getTerminalRows = getTerminalRows;
     this.requestRender = requestRender;
     this.done = done;
-    this.data = data;
-    this.updateProviderOrder();
-  }
-
-  private updateProviderOrder(): void {
-    const stats = this.data[this.activeTab];
-    this.providerOrder = Array.from(stats.providers.entries())
-      .sort((a, b) => b[1].cost - a[1].cost)
-      .map(([name]) => name);
-    this.selectedIndex = Math.min(
-      this.selectedIndex,
-      Math.max(0, this.providerOrder.length - 1),
-    );
   }
 
   handleInput(data: string): void {
@@ -87,81 +89,139 @@ export class UsageComponent {
       return;
     }
 
-    if (matchesKey(data, "v")) {
-      this.viewMode = this.viewMode === "table" ? "insights" : "table";
-      this.requestRender();
-      return;
-    }
-
     if (matchesKey(data, "tab") || matchesKey(data, "right")) {
-      const idx = TAB_ORDER.indexOf(this.activeTab);
-      this.activeTab = TAB_ORDER[(idx + 1) % TAB_ORDER.length]!;
-      this.updateProviderOrder();
-      this.requestRender();
+      this.switchTab(1);
     } else if (matchesKey(data, "shift+tab") || matchesKey(data, "left")) {
-      const idx = TAB_ORDER.indexOf(this.activeTab);
-      this.activeTab =
-        TAB_ORDER[(idx - 1 + TAB_ORDER.length) % TAB_ORDER.length]!;
-      this.updateProviderOrder();
-      this.requestRender();
-    } else if (this.viewMode === "table" && matchesKey(data, "up")) {
-      if (this.selectedIndex > 0) {
-        this.selectedIndex--;
-        this.requestRender();
-      }
-    } else if (this.viewMode === "table" && matchesKey(data, "down")) {
-      if (this.selectedIndex < this.providerOrder.length - 1) {
-        this.selectedIndex++;
-        this.requestRender();
-      }
-    } else if (
-      this.viewMode === "table" &&
-      (matchesKey(data, "enter") || matchesKey(data, "space"))
-    ) {
-      const provider = this.providerOrder[this.selectedIndex];
-      if (provider) {
-        if (this.expanded.has(provider)) {
-          this.expanded.delete(provider);
-        } else {
-          this.expanded.add(provider);
-        }
-        this.requestRender();
-      }
+      this.switchTab(-1);
+    } else if (matchesKey(data, "up")) {
+      this.moveSelection(-1);
+    } else if (matchesKey(data, "down")) {
+      this.moveSelection(1);
     }
   }
 
   getTitle(): string {
-    return this.viewMode === "insights" ? "Usage Insights" : "Usage Statistics";
+    return "Usage Statistics";
   }
 
   render(width: number): string[] {
-    if (this.viewMode === "insights") {
-      const bodyWidth = Math.min(Math.max(width, 1), 88);
-      return clampLines(
-        [
-          "",
-          ...this.renderTabs(width, getTableLayout(width)),
-          ...centerBlock(this.renderInsights(bodyWidth), width, bodyWidth),
-          ...this.renderHelp(width),
-        ],
-        width,
-      );
-    }
-
     const layout = getTableLayout(width);
+    const rows = this.getModelRows();
+    this.clampSelection(rows.length);
+
+    const tabs = this.renderTabs(width, layout);
+    const header = this.renderHeader(layout, width);
+    const totals = this.renderTotals(layout, width);
+    const formula = this.renderFormulaNote(width);
+    const graph = this.renderTokenGraph(width);
+    const help = this.renderHelp(width);
+    const reservedRows =
+      1 +
+      tabs.length +
+      header.length +
+      totals.length +
+      formula.length +
+      graph.length +
+      help.length;
+    const maxTableRows = this.getMaxTableRows(reservedRows);
+
     return clampLines(
       [
         "",
-        ...this.renderTabs(width, layout),
-        ...this.renderTokenGraph(width),
-        ...this.renderHeader(layout, width),
-        ...this.renderRows(layout, width),
-        ...this.renderTotals(layout, width),
-        ...this.renderFormulaNote(width),
-        ...this.renderHelp(width),
+        ...tabs,
+        ...header,
+        ...this.renderRows(rows, layout, width, maxTableRows),
+        ...totals,
+        ...formula,
+        ...graph,
+        ...help,
       ],
       width,
     );
+  }
+
+  private switchTab(direction: -1 | 1): void {
+    const idx = TAB_ORDER.indexOf(this.activeTab);
+    this.activeTab =
+      TAB_ORDER[(idx + direction + TAB_ORDER.length) % TAB_ORDER.length]!;
+    this.selectedIndex = 0;
+    this.tableScroll = 0;
+    this.requestRender();
+  }
+
+  private moveSelection(direction: -1 | 1): void {
+    const rowCount = this.getModelRows().length;
+    if (rowCount === 0) return;
+
+    const nextIndex = Math.max(
+      0,
+      Math.min(rowCount - 1, this.selectedIndex + direction),
+    );
+    if (nextIndex === this.selectedIndex) return;
+
+    this.selectedIndex = nextIndex;
+    this.requestRender();
+  }
+
+  private getModelRows(): ModelRow[] {
+    const stats = this.data[this.activeTab];
+    const rows: ModelRow[] = [];
+
+    for (const [providerName, providerStats] of stats.providers) {
+      for (const [modelName, modelStats] of providerStats.models) {
+        rows.push({
+          label: `${modelName} (${providerName})`,
+          stats: modelStats,
+        });
+      }
+    }
+
+    return rows.sort((a, b) => {
+      const tokenDelta = b.stats.tokens.total - a.stats.tokens.total;
+      if (tokenDelta !== 0) return tokenDelta;
+      const costDelta = b.stats.cost - a.stats.cost;
+      if (costDelta !== 0) return costDelta;
+      return a.label.localeCompare(b.label);
+    });
+  }
+
+  private getMaxTableRows(reservedRows: number): number {
+    const terminalRows = this.getTerminalRows();
+    const contentRows = terminalRows
+      ? Math.max(8, Math.floor(terminalRows * 0.8) - 2)
+      : FALLBACK_CONTENT_ROWS;
+    const availableRows = contentRows - reservedRows;
+    return Math.max(1, Math.min(MAX_TABLE_ROWS, availableRows));
+  }
+
+  private clampSelection(rowCount: number): void {
+    if (rowCount === 0) {
+      this.selectedIndex = 0;
+      this.tableScroll = 0;
+      return;
+    }
+
+    this.selectedIndex = Math.max(
+      0,
+      Math.min(this.selectedIndex, rowCount - 1),
+    );
+  }
+
+  private keepSelectionVisible(rowCount: number, visibleRows: number): void {
+    this.clampSelection(rowCount);
+    if (rowCount === 0) return;
+
+    const windowRows = Math.max(1, visibleRows);
+    const maxScroll = Math.max(0, rowCount - windowRows);
+    let nextScroll = Math.min(this.tableScroll, maxScroll);
+
+    if (this.selectedIndex < nextScroll) {
+      nextScroll = this.selectedIndex;
+    } else if (this.selectedIndex >= nextScroll + windowRows) {
+      nextScroll = this.selectedIndex - windowRows + 1;
+    }
+
+    this.tableScroll = Math.max(0, Math.min(nextScroll, maxScroll));
   }
 
   private renderTokenGraph(width: number): string[] {
@@ -185,7 +245,10 @@ export class UsageComponent {
     const scaleLabels = Array.from({ length: GRAPH_HEIGHT }, (_, index) =>
       formatTokens(step * (GRAPH_HEIGHT - index)),
     );
-    const labelWidth = Math.max(1, ...scaleLabels.map((label) => visibleWidth(label)));
+    const labelWidth = Math.max(
+      1,
+      ...scaleLabels.map((label) => visibleWidth(label)),
+    );
     const graphLines: string[] = [];
 
     for (let row = GRAPH_HEIGHT; row >= 1; row--) {
@@ -251,57 +314,6 @@ export class UsageComponent {
     return chars.join("");
   }
 
-  private renderInsights(width: number): string[] {
-    const th = this.theme;
-    const stats = this.data[this.activeTab];
-    const { insights } = stats.insights;
-    const hasMessages = stats.totals.messages > 0;
-    const hasCost = stats.totals.cost > 0;
-    const lines: string[] = [];
-
-    lines.push("What's contributing to your cost?");
-    lines.push(
-      th.fg("dim", "Approximate, based on local sessions on this machine."),
-    );
-    lines.push("");
-    const note = `${TAB_LABELS[this.activeTab]} · weighted by cost (USD) · these overlap and can sum to >100%`;
-    lines.push(th.fg("dim", note));
-    lines.push("");
-
-    if (!hasMessages) {
-      lines.push(th.fg("dim", "  No usage recorded for this period."));
-      lines.push("");
-      return lines;
-    }
-    if (!hasCost) {
-      lines.push(th.fg("dim", "  No cost data recorded for this period."));
-      lines.push("");
-      return lines;
-    }
-    if (insights.length === 0) {
-      lines.push(th.fg("dim", "  No insights above 1% for this period."));
-      lines.push("");
-      return lines;
-    }
-
-    const indent = "     ";
-    const adviceWidth = Math.max(width - indent.length, 30);
-
-    for (const insight of insights) {
-      const pct = th.fg(
-        "accent",
-        th.bold(formatInsightPercent(insight.percent)),
-      );
-      lines.push(`${pct} ${insight.headline}`);
-      for (const wrapped of wrapTextWithAnsi(insight.advice, adviceWidth)) {
-        lines.push(`${indent}${th.fg("dim", wrapped)}`);
-      }
-      lines.push("");
-    }
-
-    return lines;
-  }
-
   private renderTabs(width: number, layout: TableLayout): string[] {
     const th = this.theme;
     const fullTabs = TAB_ORDER.map((tab) => {
@@ -318,14 +330,12 @@ export class UsageComponent {
       activeTabOnly,
     ]);
 
-    // Compact-note only applies to the table view — it's meaningless for insights.
-    const infoLines =
-      this.viewMode === "table" && layout.compact
-        ? wrapTextWithAnsi(
-            th.fg("dim", "Compact view. Widen the terminal for more columns."),
-            Math.max(width, 1),
-          )
-        : [];
+    const infoLines = layout.compact
+      ? wrapTextWithAnsi(
+          th.fg("dim", "Compact view. Widen the terminal for more columns."),
+          Math.max(width, 1),
+        )
+      : [];
 
     return [
       centerLine(tabLine, width),
@@ -337,7 +347,7 @@ export class UsageComponent {
   private renderHeader(layout: TableLayout, width: number): string[] {
     const th = this.theme;
 
-    let headerLine = fitCell("Provider / Model", layout.nameWidth);
+    let headerLine = fitCell("Model (Provider)", layout.nameWidth);
     for (const col of layout.columns) {
       const label = fitCell(col.label, col.width, "right");
       headerLine += col.dimmed ? th.fg("dim", label) : label;
@@ -354,19 +364,17 @@ export class UsageComponent {
     stats: BaseStats & { sessions: Set<string> | number },
     layout: TableLayout,
     options: {
-      indent?: number;
       selected?: boolean;
       dimAll?: boolean;
       prefix?: string;
     } = {},
   ): string {
     const th = this.theme;
-    const { indent = 0, selected = false, dimAll = false, prefix } = options;
+    const { selected = false, dimAll = false, prefix = "" } = options;
 
-    const rawPrefix = prefix ?? " ".repeat(indent);
     const safePrefix =
       layout.nameWidth > 0
-        ? truncateToWidth(rawPrefix, layout.nameWidth, "")
+        ? truncateToWidth(prefix, layout.nameWidth, "")
         : "";
     const prefixWidth = visibleWidth(safePrefix);
     const innerNameWidth = Math.max(layout.nameWidth - prefixWidth, 0);
@@ -391,53 +399,43 @@ export class UsageComponent {
     return row;
   }
 
-  private renderRows(layout: TableLayout, width: number): string[] {
+  private renderRows(
+    rows: ModelRow[],
+    layout: TableLayout,
+    width: number,
+    maxRows: number,
+  ): string[] {
     const th = this.theme;
-    const stats = this.data[this.activeTab];
     const lines: string[] = [];
 
-    if (this.providerOrder.length === 0) {
-      lines.push(centerLine(th.fg("dim", "No usage data for this period"), width));
+    if (rows.length === 0) {
+      lines.push(
+        centerLine(th.fg("dim", "No usage data for this period"), width),
+      );
       return lines;
     }
 
-    for (let i = 0; i < this.providerOrder.length; i++) {
-      const providerName = this.providerOrder[i]!;
-      const providerStats = stats.providers.get(providerName)!;
-      const isSelected = i === this.selectedIndex;
-      const isExpanded = this.expanded.has(providerName);
-      const arrow = isExpanded ? "▾" : "▸";
-      const prefix = isSelected
-        ? th.fg("accent", `${arrow} `)
-        : th.fg("dim", `${arrow} `);
+    this.keepSelectionVisible(rows.length, maxRows);
+    const visibleRows = rows.slice(
+      this.tableScroll,
+      this.tableScroll + Math.max(1, maxRows),
+    );
+
+    for (let i = 0; i < visibleRows.length; i++) {
+      const rowIndex = this.tableScroll + i;
+      const row = visibleRows[i]!;
+      const isSelected = rowIndex === this.selectedIndex;
+      const prefix = isSelected ? th.fg("accent", "▸ ") : "  ";
 
       lines.push(
         centerLine(
-          this.renderDataRow(providerName, providerStats, layout, {
+          this.renderDataRow(row.label, row.stats, layout, {
             selected: isSelected,
             prefix,
           }),
           width,
         ),
       );
-
-      if (isExpanded) {
-        const models = Array.from(providerStats.models.entries()).sort(
-          (a, b) => b[1].cost - a[1].cost,
-        );
-
-        for (const [modelName, modelStats] of models) {
-          lines.push(
-            centerLine(
-              this.renderDataRow(modelName, modelStats, layout, {
-                indent: 4,
-                dimAll: true,
-              }),
-              width,
-            ),
-          );
-        }
-      }
     }
 
     return lines;
@@ -471,23 +469,12 @@ export class UsageComponent {
   }
 
   private renderHelp(width: number): string[] {
-    const variants =
-      this.viewMode === "insights"
-        ? [
-            "[Tab/←→] period  [v] table view  [q] close",
-            "[Tab] period  [v] table  [q] close",
-            "[v] table  [q] close",
-            "[q] close",
-          ]
-        : [
-            "[Tab/←→] period  [↑↓] select  [Enter] expand  [v] insights  [q] close",
-            "[Tab] period  [↑↓] select  [Enter] expand  [v] insights  [q] close",
-            "[↑↓] select  [Enter] expand  [v] insights  [q] close",
-            "[↑↓] select  [v] insights  [q] close",
-            "[↑↓] select  [q] close",
-            "[q] close",
-          ];
-    const line = pickFittingText(width, variants);
+    const line = pickFittingText(width, [
+      "[Tab/←→] period  [↑↓] select/scroll  [q] close",
+      "[Tab] period  [↑↓] scroll  [q] close",
+      "[↑↓] scroll  [q] close",
+      "[q] close",
+    ]);
     return [centerLine(this.theme.fg("dim", line), width)];
   }
 

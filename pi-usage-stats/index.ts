@@ -50,10 +50,9 @@ function renderBox(
 /**
  * /usage - Usage statistics dashboard
  *
- * Shows a centered overlay with usage stats grouped by provider.
+ * Shows a centered overlay with usage stats grouped by model.
  * - Tab cycles: Today → This Week → This Month → All Time
- * - Arrow keys navigate providers
- * - Enter expands/collapses to show models
+ * - Arrow keys navigate/scroll models
  */
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("usage", {
@@ -98,6 +97,7 @@ export default function (pi: ExtensionAPI) {
           const usage = new UsageComponent(
             theme,
             data,
+            () => tui.terminal?.rows,
             () => tui.requestRender(),
             () => done(),
           );
@@ -119,7 +119,7 @@ export default function (pi: ExtensionAPI) {
           overlay: true,
           overlayOptions: {
             anchor: "center",
-            width: "40%",
+            width: "60%",
             minWidth: 80,
             maxHeight: "80%",
             margin: 2,

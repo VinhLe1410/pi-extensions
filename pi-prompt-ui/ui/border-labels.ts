@@ -15,7 +15,6 @@ import {
 
 const TOP_MODEL_PRIORITY = 50;
 const TOP_THINKING_PRIORITY = 40;
-const TOP_FAST_PRIORITY = 30;
 const TOP_SESSION_USAGE_PRIORITY = 20;
 const TOP_WEEKLY_USAGE_PRIORITY = 10;
 const BOTTOM_BRANCH_PRIORITY = 30;
@@ -102,7 +101,6 @@ export function buildBorderLabels(
   theme: Theme,
   git: GitCache,
   usageState: UsageState,
-  fastModeEnabled: boolean,
   thinkingLevel = getThinkingLevel(ctx),
 ): BorderLabels {
   const modelName = ctx.model?.name ?? null;
@@ -121,15 +119,6 @@ export function buildBorderLabels(
       text: renderThinking(theme, thinkingLevel),
       priority: TOP_THINKING_PRIORITY,
     },
-    ...(fastModeEnabled
-      ? [
-          {
-            id: "fast",
-            text: theme.fg("success", `󱐋 fast`),
-            priority: TOP_FAST_PRIORITY,
-          },
-        ]
-      : []),
   ];
 
   const topRight: BorderItem[] = usageWindows(usageState.current()).map(

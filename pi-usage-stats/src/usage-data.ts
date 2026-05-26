@@ -2,13 +2,10 @@ import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { TAB_ORDER } from "./constants";
-import { computeInsights, LONG_SESSION_MS } from "./insights";
 import type {
   BaseStats,
-  GlobalSessionSpan,
   ModelStats,
   ParsedSessionFile,
-  PeriodRawData,
   ProviderStats,
   SessionMessage,
   TabName,
@@ -158,13 +155,8 @@ function emptyTimeFilteredStats(tokenBucketCount = 0): TimeFilteredStats {
   return {
     providers: new Map(),
     totals: { sessions: 0, messages: 0, cost: 0, tokens: emptyTokens() },
-    insights: { insights: [] },
     tokenBuckets: Array(tokenBucketCount).fill(0),
   };
-}
-
-function emptyPeriodRawData(): PeriodRawData {
-  return { messages: [], sessionCosts: new Map() };
 }
 
 function emptyUsageData(monthDayCount: number): UsageData {
@@ -231,26 +223,9 @@ function addMessagesToUsageData(
   nextWeekMs: number,
   monthStartMs: number,
   nextMonthMs: number,
-  rawByPeriod: Record<TabName, PeriodRawData>,
-  globalSessionSpans: Map<string, GlobalSessionSpan>,
   periodSessionIds: Record<TabName, Set<string>>,
 ): void {
   for (const msg of messages) {
-    // Track real per-session lifetime across every message we see, regardless of
-    // which period the message falls into. Used later for the "8h+ session" insight.
-    if (msg.timestamp > 0) {
-      const span = globalSessionSpans.get(sessionId);
-      if (!span) {
-        globalSessionSpans.set(sessionId, {
-          startMs: msg.timestamp,
-          endMs: msg.timestamp,
-        });
-      } else {
-        if (msg.timestamp < span.startMs) span.startMs = msg.timestamp;
-        if (msg.timestamp > span.endMs) span.endMs = msg.timestamp;
-      }
-    }
-
     const periods = getPeriodsForTimestamp(
       msg.timestamp,
       todayMs,
@@ -296,20 +271,6 @@ function addMessagesToUsageData(
       accumulateStats(stats.totals, msg.cost, tokens);
 
       addToTokenBuckets(stats, period, msg.timestamp, tokens.total, weekStartMs);
-
-      const raw = rawByPeriod[period];
-      raw.messages.push({
-        sessionId,
-        timestamp: msg.timestamp,
-        cost: msg.cost,
-        input: msg.input,
-        cacheRead: msg.cacheRead,
-        cacheWrite: msg.cacheWrite,
-      });
-      raw.sessionCosts.set(
-        sessionId,
-        (raw.sessionCosts.get(sessionId) ?? 0) + msg.cost,
-      );
     }
   }
 }
@@ -351,19 +312,12 @@ export async function collectUsageData(
   ).getDate();
 
   const data = emptyUsageData(monthDayCount);
-  const rawByPeriod: Record<TabName, PeriodRawData> = {
-    today: emptyPeriodRawData(),
-    thisWeek: emptyPeriodRawData(),
-    thisMonth: emptyPeriodRawData(),
-    allTime: emptyPeriodRawData(),
-  };
   const periodSessionIds: Record<TabName, Set<string>> = {
     today: new Set(),
     thisWeek: new Set(),
     thisMonth: new Set(),
     allTime: new Set(),
   };
-  const globalSessionSpans = new Map<string, GlobalSessionSpan>();
 
   const sessionFiles = await getAllSessionFiles(signal);
   if (signal?.aborted) return null;
@@ -385,8 +339,6 @@ export async function collectUsageData(
       nextWeekMs,
       monthStartMs,
       nextMonthMs,
-      rawByPeriod,
-      globalSessionSpans,
       periodSessionIds,
     );
 
@@ -395,19 +347,6 @@ export async function collectUsageData(
 
   for (const period of TAB_ORDER) {
     data[period].totals.sessions = periodSessionIds[period].size;
-  }
-
-  // Classify sessions that are globally long-running once, then reuse across periods.
-  const longSessionIds = new Set<string>();
-  for (const [id, span] of globalSessionSpans) {
-    if (span.endMs - span.startMs >= LONG_SESSION_MS) longSessionIds.add(id);
-  }
-
-  for (const period of TAB_ORDER) {
-    data[period].insights = computeInsights(
-      rawByPeriod[period],
-      longSessionIds,
-    );
   }
 
   return data;
