@@ -1,0 +1,40 @@
+{
+  "name": "pi-subagents",
+  "version": "2.0.0",
+  "description": "Serious subagent runtime for pi with interactive and background child agents",
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "author": "edxeth",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/edxeth/pi-subagents"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/test.ts test/system-prompt-mode.test.ts test/runtime/widget.test.ts test/mux/cmux.test.ts test/live-test-guard.test.ts",
+    "test:e2e-live-blocking": "node scripts/test-e2e-live-blocking.mjs",
+    "test:e2e-live-mix-blocking": "node scripts/test-e2e-live-mix-blocking.mjs",
+    "test:e2e-live-deny-tools": "node scripts/test-e2e-live-deny-tools.mjs",
+    "test:e2e-live-tools": "node scripts/test-e2e-live-tools.mjs",
+    "test:e2e-live-extensions": "node scripts/test-e2e-live-extensions.mjs",
+    "test:e2e-live-stop-after-turn": "node scripts/test-e2e-live-stop-after-turn.mjs",
+    "test:e2e-live-mixed-batch": "node scripts/test-e2e-live-mixed-batch.mjs"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "trustedDependencies": [
+    "koffi",
+    "protobufjs"
+  ],
+  "private": true
+}

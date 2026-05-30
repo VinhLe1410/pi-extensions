@@ -1,0 +1,22 @@
+import "./session/session.test.ts";
+import "./session/exit-sidecar.test.ts";
+
+import "./tools/subagent-done.test.ts";
+import "./tools/message-renderers.test.ts";
+import "./tools/tool-render-call.test.ts";
+import "./artifacts/storage.test.ts";
+import "./launch/config.test.ts";
+import "./agents/definitions-agent-list.test.ts";
+import "./runtime/launch-results.test.ts";
+import "./runtime/elapsed-format.test.ts";
+
+
+import "./agents/ambient-runtime-paths.test.ts";
+import "./launch/fork-session.test.ts";
+import "./runtime/wait.test.ts";
+import "./runtime/shutdown-policy.test.ts";
+import "./runtime/resume-tool.test.ts";
+import "./runtime/mixed-batch-classifier.test.ts";
+import "./launch/helpers.test.ts";
+import "./mux/mux.test.ts";
+import "./mux/zellij-placement.test.ts";

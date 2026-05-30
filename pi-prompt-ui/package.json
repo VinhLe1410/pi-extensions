@@ -1,0 +1,5 @@
+{
+  "name": "pi-prompt-ui",
+  "private": true,
+  "description": "Pi prompt UI with model, usage, location, and context border labels"
+}

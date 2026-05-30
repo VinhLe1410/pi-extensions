@@ -1,0 +1,12 @@
+packages:
+  - pi-prompt-ui
+  - pi-usage-stats
+  - pi-whimsical
+  - pi-chat-ui
+  - pi-git-commit
+  - pi-gitnexus
+  - pi-subagents
+allowBuilds:
+  "@google/genai": true
+  koffi: true
+  protobufjs: true
