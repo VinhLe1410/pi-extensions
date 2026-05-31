@@ -67,22 +67,23 @@ export function renderAgentListReminder(
 		].join("\n");
 	});
 	const body = [
-		"You can launch separate helper agents with the subagent tool. Use this roster to choose exact agent names and to understand how each launched agent behaves.",
+		"<subagent-capabilities>",
+		"Available named sub-agent definitions. This is metadata for the subagent tool; follow the session's subagent usage policy when deciding whether to delegate.",
+		"",
 		"<subagent-roster>",
 		agentLines.join("\n\n"),
 		"</subagent-roster>",
-		"<subagent-rules>",
-		"- Agent names are exact values for subagent.agent or children[].agent.",
-		"- tool_return=wait_here means the subagent tool call waits until the helper finishes.",
-		"- tool_return=later_message means the tool call starts the helper and returns before the work is done; do not invent its findings.",
-		"- runs_as=visible_terminal means a human can watch or type into the helper session. runs_as=hidden_process means no visible terminal is opened.",
-		"- context=fresh_chat_needs_full_brief means write a self-contained task with objective, files, constraints, and expected output.",
-		"- context=copy_of_this_chat means the helper starts from this conversation; give scope, boundary, and expected output without repeating all background.",
-		"- completion=exits_automatically means the helper should finish and close itself. completion=human_or_agent_must_finish means the session stays open until the human or helper explicitly completes it.",
-		"- If the user names an agent that is not listed, say it was not found and stop; do not suggest a different listed agent.",
-		"</subagent-rules>",
+		"",
+		"<subagent-field-guide>",
+		"- agent names are exact values for subagent.agent or children[].agent",
+		"- tool_return: wait_here returns the child result in the tool call; later_message delivers it in a later parent turn",
+		"- runs_as: visible_terminal opens a watched pane; hidden_process runs headlessly",
+		"- context: fresh_chat_needs_full_brief starts clean; copy_of_this_chat starts from the parent transcript",
+		"- completion: exits_automatically closes itself; human_or_agent_must_finish stays open until explicitly finished",
+		"</subagent-field-guide>",
+		"</subagent-capabilities>",
 	].join("\n");
-	return `<system-reminder>\n${body}\n</system-reminder>`;
+	return body;
 }
 
 export function getAgentListSignature(

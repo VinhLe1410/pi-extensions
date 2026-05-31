@@ -249,30 +249,16 @@ export function registerSubagentCoreTools(
 			"Agent definitions control model, tools, context, UI mode, wait behavior, and completion lifecycle; " +
 			"this call only chooses the agent name(s) and task(s).",
 		promptSnippet:
-			"Subagents are separate helper processes you can launch to do work outside this chat turn.\n" +
+			"Launch a named sub-agent only when the session's subagent usage policy says delegation is appropriate.\n" +
 			"\n" +
-			"Use this tool when a listed agent is a clear fit for specialist, complex, or parallel work. Do small direct work yourself: quick answers, simple file reads, and tiny one-shot edits.\n" +
-			"\n" +
-			"Use exact agent names and behavior fields from the subagent roster when present; field meanings are defined in <subagent-rules>.\n" +
-			"\n" +
-			"How to call:\n" +
-			"- Use exact roster names in agent fields.\n" +
+			"Call mechanics:\n" +
+			"- Use exact roster names in agent fields; if a requested agent is not listed, do not substitute another.\n" +
 			"- Always provide name and title. name is a machine handle: lower-kebab <scope>-<role>, 2-4 words, max 32 chars, e.g. auth-scout, diff-reviewer, session-tester. title is human prose: sentence case, 3-8 words, e.g. Auth implementation map.\n" +
 			"- If launching one helper, pass agent/name/title/task normally.\n" +
-			"- If launching multiple helpers for one user request, make one subagent call with children:[...] so all helpers start before any waiting happens.\n" +
-			"- If the user names multiple agents, include each named agent exactly once. Do not substitute one agent for another.\n" +
-			"\n" +
-			"Writing tasks:\n" +
-			"- Translate the user's request into each helper's task; do not change the work just because of the agent name.\n" +
+			"- If launching multiple independent helpers for one request, make one subagent call with children:[...] so they start together.\n" +
 			"- For non-trivial work, write readable Markdown with objective, scope, relevant files/facts, constraints, and requested output.\n" +
-			"- For parallel helpers, make each task non-overlapping.\n" +
 			"\n" +
-			"After launch:\n" +
-			"- If a helper returns later, continue only with clearly independent work. Do not redo delegated work and do not claim the helper's findings before its later message appears.\n" +
-			"- If no safe independent work is clear, stop your response and wait for the later helper message.\n" +
-			"- Ask the user only when there is a plausible next step but ownership is ambiguous.\n" +
-			"Results arrive automatically as a steer message that starts a new turn. " +
-			"Do not poll, sleep-read, or check session files — the harness handles delivery.\n" +
+			"Async delivery: results arrive automatically as tool output or a later steer message. Do not poll, sleep-read, or check session files for results.\n" +
 			getCoordinatorOnlyTurnPrompt(),
 		parameters: SubagentParams,
 		execute: async (toolCallId, params, signal, _onUpdate, ctx) => {

@@ -112,9 +112,9 @@ export function requestSubagentBatchStop(): void {
 
 export function getCoordinatorOnlyTurnPrompt(): string {
 	if (isCoordinatorOnlyTurnDisabled()) {
-		return "You may continue with non-overlapping work after launching a tool_return=later_message helper. Do not redo delegated work or claim results before the later report appears.";
+		return "After launching a tool_return=later_message helper, continue only with work that is independent of the pending result.";
 	}
-	return "For helpers with tool_return=later_message, the runtime may stop after this tool batch so the helper's later report can be inserted into this chat. Do not redo delegated work or claim results before the later report appears.";
+	return "For helpers with tool_return=later_message, the runtime may stop after this tool batch so the helper's later report can be inserted into this chat.";
 }
 
 export function getSubagentBatchStopMetadata(): { terminate?: true } {

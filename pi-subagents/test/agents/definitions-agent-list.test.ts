@@ -432,52 +432,33 @@ describe("agent definitions and catalog", () => {
 		assert.match(tool.description, /named helper agents from the subagent roster/);
 		assert.match(
 			tool.promptSnippet,
-			/separate helper processes you can launch to do work outside this chat turn/,
+			/Launch a named sub-agent only when the session's subagent usage policy says delegation is appropriate/,
 		);
+		assert.match(tool.promptSnippet, /Call mechanics:/);
 		assert.match(
 			tool.promptSnippet,
-			/Use exact agent names and behavior fields from the subagent roster when present; field meanings are defined in <subagent-rules>/,
+			/Use exact roster names in agent fields; if a requested agent is not listed, do not substitute another/,
 		);
 		assert.match(tool.promptSnippet, /make one subagent call with children/);
-		assert.match(
-			tool.promptSnippet,
-			/include each named agent exactly once/,
-		);
-		assert.match(
-			tool.promptSnippet,
-			/Do not substitute one agent for another/,
-		);
-		assert.match(
-			tool.promptSnippet,
-			/Translate the user.s request into each helper.s task/,
-		);
-		assert.match(
-			tool.promptSnippet,
-			/do not change the work just because of the agent name/,
-		);
 		assert.match(
 			tool.promptSnippet,
 			/write readable Markdown with objective, scope, relevant files\/facts, constraints, and requested output/,
 		);
 		assert.match(
 			tool.promptSnippet,
-			/Do small direct work yourself: quick answers, simple file reads, and tiny one-shot edits/,
-		);
-		assert.match(
-			tool.promptSnippet,
-			/Do not redo delegated work/,
-		);
-		assert.match(
-			tool.promptSnippet,
-			/do not claim the helper's findings before its later message appears/,
+			/Async delivery: results arrive automatically as tool output or a later steer message/,
 		);
 		assert.match(
 			tool.promptSnippet,
 			/For helpers with tool_return=later_message, the runtime may stop after this tool batch/,
 		);
-		assert.match(
+		assert.doesNotMatch(
 			tool.promptSnippet,
-			/Do not redo delegated work or claim results before the later report appears/,
+			/Do small direct work yourself/,
+		);
+		assert.doesNotMatch(
+			tool.promptSnippet,
+			/Do not redo delegated work/,
 		);
 		assert.doesNotMatch(
 			tool.promptSnippet,
@@ -504,9 +485,9 @@ describe("agent definitions and catalog", () => {
 		assert.ok(tool);
 		assert.match(
 			tool.promptSnippet,
-			/You may continue with non-overlapping work after launching a tool_return=later_message helper/,
+			/After launching a tool_return=later_message helper, continue only with work that is independent of the pending result/,
 		);
-		assert.match(tool.promptSnippet, /Do not redo delegated work/);
+		assert.doesNotMatch(tool.promptSnippet, /Do not redo delegated work/);
 		assert.doesNotMatch(
 			tool.promptSnippet,
 			/For helpers with tool_return=later_message, the runtime may stop/,
