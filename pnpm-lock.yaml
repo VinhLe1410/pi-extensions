@@ -30,9 +30,7 @@ importers:
         specifier: ^4.1.5
         version: 4.1.6(@types/node@25.7.0)(vite@8.0.12(@types/node@25.7.0)(jiti@2.7.0)(yaml@2.9.0))
 
-  pi-git-commit: {}
-
-  pi-gitnexus:
+  pi-codex-search:
     dependencies:
       '@earendil-works/pi-ai':
         specifier: '*'
@@ -43,9 +41,8 @@ importers:
       '@earendil-works/pi-tui':
         specifier: '*'
         version: 0.75.5
-      typebox:
-        specifier: '*'
-        version: 1.1.38
+
+  pi-git-commit: {}
 
   pi-prompt-ui: {}
 
@@ -65,7 +62,18 @@ importers:
 
   pi-whimsical: {}
 
+  pi-zed-acp:
+    dependencies:
+      '@agentclientprotocol/sdk':
+        specifier: 0.22.1
+        version: 0.22.1(zod@4.4.3)
+
 packages:
+
+  '@agentclientprotocol/sdk@0.22.1':
+    resolution: {integrity: sha512-DfqXtl/8gO9NImq094MTaCXEU2vkhh6v7q/kT+9UjZxUqj8hYaya2OjLVIqn16MzNHcXEpShTR2RIauLSYeDQQ==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
 
   '@anthropic-ai/sdk@0.91.1':
     resolution: {integrity: sha512-LAmu761tSN9r66ixvmciswUj/ZC+1Q4iAfpedTfSVLeswRwnY3n2Nb6Tsk+cLPP28aLOPWeMgIuTuCcMC6W/iw==}
@@ -1071,6 +1079,10 @@ packages:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
+
+  '@agentclientprotocol/sdk@0.22.1(zod@4.4.3)':
+    dependencies:
+      zod: 4.4.3
 
   '@anthropic-ai/sdk@0.91.1(zod@4.4.3)':
     dependencies:

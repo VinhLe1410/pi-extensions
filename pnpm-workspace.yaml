@@ -1,11 +1,10 @@
 packages:
+  - pi-codex-search
+  - pi-git-commit
   - pi-prompt-ui
+  - pi-subagents
   - pi-usage-stats
   - pi-whimsical
-  - pi-chat-ui
-  - pi-git-commit
-  - pi-gitnexus
-  - pi-subagents
 allowBuilds:
   "@google/genai": true
   koffi: true
