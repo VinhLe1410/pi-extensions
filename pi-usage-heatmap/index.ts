@@ -1,19 +1,20 @@
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { Key, matchesKey, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import {
-  addDays,
-  format,
-  isAfter,
-  startOfDay,
-  startOfWeek,
-} from "date-fns";
+  Key,
+  matchesKey,
+  truncateToWidth,
+  visibleWidth,
+  type Component,
+} from "@earendil-works/pi-tui";
+import { addDays, format, isAfter, startOfDay, startOfWeek } from "date-fns";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
 const CELL_WIDTH = 2;
 const MONTH_GAP_WIDTH = 1;
 const MONTHS_PER_YEAR = 12;
+const NON_ZERO_LEVELS = 8;
 const FALLBACK_ACCENT = "#61afef";
 const WEEK_STARTS_ON = 1 as const;
 
@@ -53,7 +54,10 @@ function numberValue(value: unknown): number {
 }
 
 function dateFromValue(value: unknown): Date | undefined {
-  const date = typeof value === "number" || typeof value === "string" ? new Date(value) : undefined;
+  const date =
+    typeof value === "number" || typeof value === "string"
+      ? new Date(value)
+      : undefined;
   return date && !Number.isNaN(date.getTime()) ? date : undefined;
 }
 
@@ -61,7 +65,11 @@ async function findSessionFiles(root: string): Promise<string[]> {
   const files: string[] = [];
 
   async function walk(dir: string): Promise<void> {
-    let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
+    let entries: Array<{
+      name: string;
+      isDirectory(): boolean;
+      isFile(): boolean;
+    }>;
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
     } catch {
@@ -84,25 +92,35 @@ async function findSessionFiles(root: string): Promise<string[]> {
   return files;
 }
 
-function readAssistantUsage(entry: unknown, filePath: string, lineNumber: number): AssistantUsageRecord | undefined {
-  if (!isRecord(entry) || entry.type !== "message" || !isRecord(entry.message)) return undefined;
+function readAssistantUsage(
+  entry: unknown,
+  filePath: string,
+  lineNumber: number,
+): AssistantUsageRecord | undefined {
+  if (!isRecord(entry) || entry.type !== "message" || !isRecord(entry.message))
+    return undefined;
 
   const message = entry.message;
-  if (message.role !== "assistant" || !isRecord(message.usage)) return undefined;
+  if (message.role !== "assistant" || !isRecord(message.usage))
+    return undefined;
 
   const usage = message.usage;
   const output = Math.trunc(numberValue(usage.output));
   if (output <= 0) return undefined;
 
-  const date = dateFromValue(message.timestamp) ?? dateFromValue(entry.timestamp);
+  const date =
+    dateFromValue(message.timestamp) ?? dateFromValue(entry.timestamp);
   if (!date) return undefined;
 
-  const entryId = typeof entry.id === "string" ? entry.id : `${filePath}:${lineNumber}`;
-  const timestamp = typeof message.timestamp === "number" || typeof message.timestamp === "string"
-    ? String(message.timestamp)
-    : typeof entry.timestamp === "string"
-      ? entry.timestamp
-      : "";
+  const entryId =
+    typeof entry.id === "string" ? entry.id : `${filePath}:${lineNumber}`;
+  const timestamp =
+    typeof message.timestamp === "number" ||
+    typeof message.timestamp === "string"
+      ? String(message.timestamp)
+      : typeof entry.timestamp === "string"
+        ? entry.timestamp
+        : "";
   const provider = typeof message.provider === "string" ? message.provider : "";
   const model = typeof message.model === "string" ? message.model : "";
   const input = Math.trunc(numberValue(usage.input));
@@ -113,7 +131,17 @@ function readAssistantUsage(entry: unknown, filePath: string, lineNumber: number
   return {
     date,
     output,
-    dedupeKey: [entryId, timestamp, provider, model, input, output, cacheRead, cacheWrite, totalTokens].join("|"),
+    dedupeKey: [
+      entryId,
+      timestamp,
+      provider,
+      model,
+      input,
+      output,
+      cacheRead,
+      cacheWrite,
+      totalTokens,
+    ].join("|"),
   };
 }
 
@@ -229,7 +257,8 @@ function rgbToHsl({ r, g, b }: Rgb): Hsl {
   if (max === min) return { h: 0, s: 0, l: lightness * 100 };
 
   const delta = max - min;
-  const saturation = lightness > 0.5 ? delta / (2 - max - min) : delta / (max + min);
+  const saturation =
+    lightness > 0.5 ? delta / (2 - max - min) : delta / (max + min);
   let hue: number;
 
   switch (max) {
@@ -274,7 +303,9 @@ function hslToRgb({ h, s, l }: Hsl): Rgb {
 }
 
 function parseThemeAccent(theme: Theme): Rgb {
-  const trueColorMatch = theme.getFgAnsi("accent").match(/\x1b\[38;2;(\d+);(\d+);(\d+)m/);
+  const trueColorMatch = theme
+    .getFgAnsi("accent")
+    .match(/\x1b\[38;2;(\d+);(\d+);(\d+)m/);
   if (trueColorMatch) {
     return {
       r: Number(trueColorMatch[1]),
@@ -292,13 +323,16 @@ function colorCell(rgb: Rgb, text: string): string {
 
 function makeLevelStyles(theme: Theme): Array<(text: string) => string> {
   const accent = rgbToHsl(parseThemeAccent(theme));
-  const styles: Array<(text: string) => string> = [(text) => theme.fg("dim", text)];
+  const styles: Array<(text: string) => string> = [
+    (text) => theme.fg("dim", text),
+  ];
 
-  for (let level = 1; level <= 5; level++) {
+  for (let level = 1; level <= NON_ZERO_LEVELS; level++) {
+    const progress = level / NON_ZERO_LEVELS;
     const rgb = hslToRgb({
       h: accent.h,
-      s: clamp(accent.s * (0.42 + level * 0.12), 25, 96),
-      l: clamp(18 + level * 8 + (accent.l - 50) * 0.15, 18, 72),
+      s: clamp(accent.s * (0.38 + progress * 0.62), 25, 96),
+      l: clamp(20 + progress * 40 + (accent.l - 50) * 0.15, 18, 72),
     });
     styles.push((text, color = rgb) => colorCell(color, text));
   }
@@ -318,20 +352,28 @@ function upperBound(values: number[], target: number): number {
 }
 
 function createLevelResolver(days: DayTotals): (value: number) => number {
-  const values = Array.from(days.values()).filter((value) => value > 0).sort((a, b) => a - b);
+  const values = Array.from(days.values())
+    .filter((value) => value > 0)
+    .sort((a, b) => a - b);
   if (values.length === 0) return () => 0;
 
   return (value) => {
     if (value <= 0) return 0;
-    return clamp(Math.ceil((upperBound(values, value) / values.length) * 5), 1, 5);
+    return clamp(
+      Math.ceil((upperBound(values, value) / values.length) * NON_ZERO_LEVELS),
+      1,
+      NON_ZERO_LEVELS,
+    );
   };
 }
 
 function formatTokens(tokens: number): string {
   const abs = Math.abs(tokens);
   if (abs < 1_000) return String(tokens);
-  if (abs < 1_000_000) return `${(tokens / 1_000).toFixed(abs < 10_000 ? 1 : 0)}k`;
-  if (abs < 1_000_000_000) return `${(tokens / 1_000_000).toFixed(abs < 10_000_000 ? 1 : 0)}M`;
+  if (abs < 1_000_000)
+    return `${(tokens / 1_000).toFixed(abs < 10_000 ? 1 : 0)}k`;
+  if (abs < 1_000_000_000)
+    return `${(tokens / 1_000_000).toFixed(abs < 10_000_000 ? 1 : 0)}M`;
   return `${(tokens / 1_000_000_000).toFixed(1)}B`;
 }
 
@@ -358,20 +400,29 @@ function firstWeekdayOfYear(year: number, weekdayIndex: number): Date {
 function getWeekdayDates(year: number, row: number): Date[] {
   const weekdayIndex = (row + WEEK_STARTS_ON) % 7;
   const dates: Date[] = [];
-  for (let day = firstWeekdayOfYear(year, weekdayIndex); day.getFullYear() === year; day = addDays(day, 7)) {
+  for (
+    let day = firstWeekdayOfYear(year, weekdayIndex);
+    day.getFullYear() === year;
+    day = addDays(day, 7)
+  ) {
     dates.push(day);
   }
   return dates;
 }
 
 function leadingYearBlankWidth(year: number, row: number): number {
-  const firstWeekStart = startOfWeek(new Date(year, 0, 1), { weekStartsOn: WEEK_STARTS_ON });
+  const firstWeekStart = startOfWeek(new Date(year, 0, 1), {
+    weekStartsOn: WEEK_STARTS_ON,
+  });
   const rowDate = addDays(firstWeekStart, row);
   return rowDate.getFullYear() === year ? 0 : CELL_WIDTH;
 }
 
 function buildMonthSpans(year: number): { spans: MonthSpan[]; width: number } {
-  const spans = Array.from({ length: MONTHS_PER_YEAR }, () => ({ start: Number.POSITIVE_INFINITY, end: 0 }));
+  const spans = Array.from({ length: MONTHS_PER_YEAR }, () => ({
+    start: Number.POSITIVE_INFINITY,
+    end: 0,
+  }));
   let width = 0;
 
   for (let row = 0; row < 7; row++) {
@@ -391,7 +442,9 @@ function buildMonthSpans(year: number): { spans: MonthSpan[]; width: number } {
   }
 
   return {
-    spans: spans.map((span) => span.start === Number.POSITIVE_INFINITY ? { start: 0, end: 0 } : span),
+    spans: spans.map((span) =>
+      span.start === Number.POSITIVE_INFINITY ? { start: 0, end: 0 } : span,
+    ),
     width,
   };
 }
@@ -404,13 +457,19 @@ function minimumWidthMessage(year: number): string {
   return `Minimum of ${minimumWidthForYear(year)} columns to view`;
 }
 
-function renderMonthLabels(theme: Theme, spans: MonthSpan[], bodyWidth: number): string {
+function renderMonthLabels(
+  theme: Theme,
+  spans: MonthSpan[],
+  bodyWidth: number,
+): string {
   const chars = Array.from({ length: bodyWidth }, () => " ");
 
   for (let monthIndex = 0; monthIndex < spans.length; monthIndex++) {
     const span = spans[monthIndex]!;
     const label = monthLabel(monthIndex + 1);
-    const labelStart = span.start + Math.max(0, Math.floor((span.end - span.start - label.length) / 2));
+    const labelStart =
+      span.start +
+      Math.max(0, Math.floor((span.end - span.start - label.length) / 2));
     for (let i = 0; i < label.length && labelStart + i < chars.length; i++) {
       chars[labelStart + i] = label[i]!;
     }
@@ -423,9 +482,10 @@ function renderFooterLines(stats: UsageStats, width: number): string[] {
   const maxPart = stats.maxDayKey
     ? `max ${formatTokens(stats.maxDayOutput)} on ${format(new Date(`${stats.maxDayKey}T00:00:00`), "MMM d")}`
     : "max 0";
-  const dedupePart = stats.dedupedOutput > 0
-    ? ` • deduped ${formatTokens(stats.dedupedOutput)} copied tokens`
-    : "";
+  const dedupePart =
+    stats.dedupedOutput > 0
+      ? ` • deduped ${formatTokens(stats.dedupedOutput)} copied tokens`
+      : "";
   const errorPart = stats.errors > 0 ? ` • ${stats.errors} read errors` : "";
   const statsLine = `${stats.year} • ${formatTokens(stats.totalOutput)} output tokens • ${stats.activeDays} active days • ${maxPart}${dedupePart}${errorPart}`;
   const controls = "r refresh • Esc close";
@@ -434,7 +494,11 @@ function renderFooterLines(stats: UsageStats, width: number): string[] {
   return visibleWidth(combined) <= width ? [combined] : [statsLine, controls];
 }
 
-function buildHeatmapLines(stats: UsageStats, theme: Theme, width: number): string[] {
+function buildHeatmapLines(
+  stats: UsageStats,
+  theme: Theme,
+  width: number,
+): string[] {
   const today = startOfDay(stats.generatedAt);
   const { spans, width: bodyWidth } = buildMonthSpans(stats.year);
   const graphWidth = 4 + bodyWidth;
@@ -444,32 +508,48 @@ function buildHeatmapLines(stats: UsageStats, theme: Theme, width: number): stri
   const dayLabels = ["Mon", "", "Wed", "", "Fri", "", ""];
   const lines: string[] = [];
 
-  lines.push(centerLine(`${theme.fg("accent", theme.bold("Usage heatmap"))} ${theme.fg("muted", "assistant output tokens")}`, width));
+  lines.push(
+    centerLine(
+      `${theme.fg("accent", theme.bold("AI Usage Heatmap"))} ${theme.fg("muted", "AI output tokens")}`,
+      width,
+    ),
+  );
   lines.push("");
   lines.push(fit(indent + renderMonthLabels(theme, spans, bodyWidth), width));
 
   for (let row = 0; row < 7; row++) {
-    const label = dayLabels[row] ? theme.fg("muted", dayLabels[row]!.padEnd(4)) : "    ";
-    let line = indent + label + " ".repeat(leadingYearBlankWidth(stats.year, row));
+    const label = dayLabels[row]
+      ? theme.fg("muted", dayLabels[row]!.padEnd(4))
+      : "    ";
+    let line =
+      indent + label + " ".repeat(leadingYearBlankWidth(stats.year, row));
     const dates = getWeekdayDates(stats.year, row);
 
     for (let i = 0; i < dates.length; i++) {
       const day = dates[i]!;
       const key = format(day, "yyyy-MM-dd");
-      const output = isAfter(day, today) ? 0 : stats.days.get(key) ?? 0;
+      const output = isAfter(day, today) ? 0 : (stats.days.get(key) ?? 0);
       const level = isAfter(day, today) ? 0 : levelFor(output);
       line += styles[level]!("■".repeat(CELL_WIDTH));
 
       const next = dates[i + 1];
-      if (next && next.getMonth() !== day.getMonth()) line += " ".repeat(MONTH_GAP_WIDTH);
+      if (next && next.getMonth() !== day.getMonth())
+        line += " ".repeat(MONTH_GAP_WIDTH);
     }
 
     lines.push(fit(line, width));
   }
 
-  const legend = [0, 1, 2, 3, 4, 5].map((level) => styles[level]!("■".repeat(CELL_WIDTH))).join(" ");
+  const legend = Array.from({ length: NON_ZERO_LEVELS + 1 }, (_, level) =>
+    styles[level]!("■".repeat(CELL_WIDTH)),
+  ).join(" ");
   lines.push("");
-  lines.push(centerLine(`${theme.fg("dim", "Less")} ${legend} ${theme.fg("dim", "More")}`, width));
+  lines.push(
+    centerLine(
+      `${theme.fg("dim", "Less")} ${legend} ${theme.fg("dim", "More")}`,
+      width,
+    ),
+  );
   for (const footerLine of renderFooterLines(stats, width)) {
     lines.push(centerLine(theme.fg("dim", footerLine), width));
   }
@@ -526,24 +606,33 @@ class UsageHeatmapComponent implements Component {
   }
 
   render(width: number): string[] {
-    if (this.cachedWidth === width && this.cachedVersion === this.version) return this.cachedLines;
+    if (this.cachedWidth === width && this.cachedVersion === this.version)
+      return this.cachedLines;
 
     const year = this.stats?.year ?? new Date().getFullYear();
     const minimumWidth = minimumWidthForYear(year);
     let lines: string[];
     if (width < minimumWidth) {
-      lines = [centerLine(this.theme.fg("warning", minimumWidthMessage(year)), width)];
+      lines = [
+        centerLine(this.theme.fg("warning", minimumWidthMessage(year)), width),
+      ];
     } else if (this.error) {
       lines = [
-        centerLine(this.theme.fg("error", "Failed to read usage sessions"), width),
+        centerLine(
+          this.theme.fg("error", "Failed to read usage sessions"),
+          width,
+        ),
         centerLine(this.theme.fg("dim", this.error), width),
         centerLine(this.theme.fg("dim", "r refresh • Esc close"), width),
       ];
     } else if (!this.stats) {
-      lines = [centerLine(this.theme.fg("muted", "Loading usage heatmap…"), width)];
+      lines = [
+        centerLine(this.theme.fg("muted", "Loading usage heatmap…"), width),
+      ];
     } else {
       lines = buildHeatmapLines(this.stats, this.theme, width);
-      if (this.loading) lines.push(centerLine(this.theme.fg("muted", "Refreshing…"), width));
+      if (this.loading)
+        lines.push(centerLine(this.theme.fg("muted", "Refreshing…"), width));
     }
 
     this.cachedLines = lines.map((line) => fit(line, width));
@@ -569,7 +658,9 @@ export default function (pi: ExtensionAPI) {
       }
 
       await ctx.ui.custom<void>((tui, theme, _keybindings, done) => {
-        const component = new UsageHeatmapComponent(tui, theme, () => done(undefined));
+        const component = new UsageHeatmapComponent(tui, theme, () =>
+          done(undefined),
+        );
         void component.refresh();
         return component;
       });
