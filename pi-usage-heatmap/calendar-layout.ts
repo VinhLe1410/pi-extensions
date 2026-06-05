@@ -4,6 +4,7 @@ import {
   MINIMUM_WIDTH_PADDING,
   MONTH_GAP_WIDTH,
   MONTHS_PER_YEAR,
+  ROW_LABEL_WIDTH,
   WEEK_STARTS_ON,
 } from "./constants.ts";
 import type { MonthSpan } from "./types.ts";
@@ -74,7 +75,7 @@ export function buildMonthSpans(year: number): {
 }
 
 export function minimumWidthForYear(year: number): number {
-  return 4 + buildMonthSpans(year).width + MINIMUM_WIDTH_PADDING;
+  return ROW_LABEL_WIDTH + buildMonthSpans(year).width + MINIMUM_WIDTH_PADDING;
 }
 
 export function minimumWidthMessage(year: number): string {

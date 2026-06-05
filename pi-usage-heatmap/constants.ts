@@ -1,4 +1,5 @@
 export const CELL_WIDTH = 2;
+export const ROW_LABEL_WIDTH = 4;
 export const MINIMUM_WIDTH_PADDING = 6;
 export const MONTH_GAP_WIDTH = 1;
 export const MONTHS_PER_YEAR = 12;

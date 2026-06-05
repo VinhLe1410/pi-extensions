@@ -1,7 +1,12 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { format, isAfter, startOfDay } from "date-fns";
-import { CELL_WIDTH, MONTH_GAP_WIDTH, NON_ZERO_LEVELS } from "./constants.ts";
+import {
+  CELL_WIDTH,
+  MONTH_GAP_WIDTH,
+  NON_ZERO_LEVELS,
+  ROW_LABEL_WIDTH,
+} from "./constants.ts";
 import {
   buildMonthSpans,
   getWeekdayDates,
@@ -30,7 +35,7 @@ function renderMonthLabels(
     }
   }
 
-  return `    ${theme.fg("muted", chars.join(""))}`;
+  return theme.fg("muted", chars.join(""));
 }
 
 function renderFooterLines(stats: UsageStats, width: number): string[] {
@@ -49,6 +54,29 @@ function renderFooterLines(stats: UsageStats, width: number): string[] {
   return visibleWidth(combined) <= width ? [combined] : [statsLine, controls];
 }
 
+function createHeatmapRenderLayout(
+  width: number,
+  bodyWidth: number,
+): {
+  bodyPrefix: string;
+  labelPrefix: string;
+  panelPrefix: string;
+  panelWidth: number;
+} {
+  const bodyIndent = Math.max(
+    ROW_LABEL_WIDTH,
+    Math.floor((width - bodyWidth) / 2),
+  );
+  const labelIndent = bodyIndent - ROW_LABEL_WIDTH;
+
+  return {
+    bodyPrefix: " ".repeat(bodyIndent),
+    labelPrefix: " ".repeat(labelIndent),
+    panelPrefix: " ".repeat(labelIndent),
+    panelWidth: ROW_LABEL_WIDTH + bodyWidth + ROW_LABEL_WIDTH,
+  };
+}
+
 export function buildHeatmapLines(
   stats: UsageStats,
   theme: Theme,
@@ -56,28 +84,40 @@ export function buildHeatmapLines(
 ): string[] {
   const today = startOfDay(stats.generatedAt);
   const { spans, width: bodyWidth } = buildMonthSpans(stats.year);
-  const graphWidth = 4 + bodyWidth;
-  const indent = " ".repeat(Math.max(0, Math.floor((width - graphWidth) / 2)));
+  const layout = createHeatmapRenderLayout(width, bodyWidth);
   const styles = makeLevelStyles(theme);
   const levelFor = createLevelResolver(stats.days);
   const dayLabels = ["Mon", "", "Wed", "", "Fri", "", ""];
+  const panelBorder = fit(
+    layout.panelPrefix +
+      theme.fg("borderMuted", "─".repeat(layout.panelWidth)),
+    width,
+  );
   const lines: string[] = [];
 
+  lines.push(panelBorder);
+  lines.push(
+    centerLine(theme.fg("accent", theme.bold("AI Usage Heatmap")), width),
+  );
   lines.push(
     centerLine(
-      `${theme.fg("accent", theme.bold("AI Usage Heatmap"))} ${theme.fg("muted", "AI output tokens")}`,
+      theme.fg("muted", "Token usage throughout the current year"),
       width,
     ),
   );
   lines.push("");
-  lines.push(fit(indent + renderMonthLabels(theme, spans, bodyWidth), width));
+  lines.push(
+    fit(layout.bodyPrefix + renderMonthLabels(theme, spans, bodyWidth), width),
+  );
 
   for (let row = 0; row < 7; row++) {
     const label = dayLabels[row]
       ? theme.fg("muted", dayLabels[row]!.padEnd(4))
       : "    ";
     let line =
-      indent + label + " ".repeat(leadingYearBlankWidth(stats.year, row));
+      layout.labelPrefix +
+      label +
+      " ".repeat(leadingYearBlankWidth(stats.year, row));
     const dates = getWeekdayDates(stats.year, row);
 
     for (let i = 0; i < dates.length; i++) {
@@ -108,6 +148,7 @@ export function buildHeatmapLines(
   for (const footerLine of renderFooterLines(stats, width)) {
     lines.push(centerLine(theme.fg("dim", footerLine), width));
   }
+  lines.push(panelBorder);
 
   return lines.map((line) => fit(line, width));
 }
