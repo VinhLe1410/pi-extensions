@@ -1,34 +1,41 @@
 import { CustomEditor } from "@earendil-works/pi-coding-agent";
 import type { KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
-import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import {
-  renderBorderLine,
-  type BorderLabels,
-  type BorderLine,
-} from "./border-layout";
-import { separator } from "./theme";
+  type Component,
+  type EditorTheme,
+  type TUI,
+  truncateToWidth,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 
-const INPUT_PADDING_LEFT = 0;
+const RAIL_GAP = " ";
+
+export interface EditorMeta {
+  modelLabel: string;
+  providerLabel: string;
+  thinkingLabel?: string;
+  quotaLabels: string[];
+}
 
 export interface EditorChrome {
-  labels: BorderLabels;
+  meta: EditorMeta;
 }
+
+type AutocompleteEditorInternals = {
+  autocompleteList?: Pick<Component, "render">;
+  isShowingAutocomplete?: () => boolean;
+};
 
 function padRight(text: string, width: number): string {
   return text + " ".repeat(Math.max(0, width - visibleWidth(text)));
 }
 
-function stripAnsi(text: string): string {
-  return text.replace(/\x1b\[[0-9;]*m/g, "");
+function clampRenderedLines(lines: string[], width: number): string[] {
+  const maxWidth = Math.max(0, width);
+  return lines.map((line) => truncateToWidth(line, maxWidth, ""));
 }
 
-function isHorizontalBorder(line: string): boolean {
-  const plain = stripAnsi(line);
-  return plain.length > 0 && /^[─ ↑↓0-9more]+$/.test(plain) && plain.includes("─");
-}
-
-export class RoundedInputEditor extends CustomEditor {
+export class PolishedInputEditor extends CustomEditor {
   private getChrome: () => EditorChrome;
   private labelTheme: Theme;
 
@@ -39,58 +46,83 @@ export class RoundedInputEditor extends CustomEditor {
     getChrome: () => EditorChrome,
     labelTheme: Theme,
   ) {
-    super(tui, theme, keybindings);
+    super(tui, theme, keybindings, { paddingX: 0 });
+    this.borderColor = (text: string) => labelTheme.fg("border", text);
     this.getChrome = getChrome;
     this.labelTheme = labelTheme;
   }
 
   render(width: number): string[] {
-    if (width < 1) return super.render(width);
+    if (width <= 2) return clampRenderedLines(super.render(width), width);
 
-    const lineWidth = width;
-    const contentWidth = Math.max(1, lineWidth - INPUT_PADDING_LEFT);
-    const leftPadding = " ".repeat(Math.min(INPUT_PADDING_LEFT, lineWidth));
-    const lines = super.render(contentWidth);
-    const bottomIndex = lines.findIndex((line, index) => index > 0 && isHorizontalBorder(line));
-    const bodyEnd = bottomIndex === -1 ? lines.length : bottomIndex;
-    const bodyLines = lines.slice(1, bodyEnd);
-    const suggestionLines = bottomIndex === -1 ? [] : lines.slice(bottomIndex + 1);
+    const rail = this.renderRail();
+    const railWidth = visibleWidth(rail);
+    const innerWidth = Math.max(1, width - railWidth);
+    const rendered = super.render(innerWidth);
+    const editorInternals = this as unknown as AutocompleteEditorInternals;
+    const isShowingAutocomplete =
+      typeof editorInternals.isShowingAutocomplete === "function" &&
+      editorInternals.isShowingAutocomplete();
 
-    const { labels } = this.getChrome();
-    const wrapLine = (line: string): string => {
-      const paddedLine = leftPadding + line;
-      return padRight(truncateToWidth(paddedLine, lineWidth, ""), lineWidth);
-    };
+    if (rendered.length < 2) {
+      return clampRenderedLines(super.render(width), width);
+    }
 
+    const { autocompleteList } = editorInternals;
+    const autocompleteCount =
+      isShowingAutocomplete && typeof autocompleteList?.render === "function"
+        ? autocompleteList.render(innerWidth).length
+        : 0;
+    const editorFrame =
+      autocompleteCount > 0 && autocompleteCount < rendered.length
+        ? rendered.slice(0, -autocompleteCount)
+        : rendered;
+    const autocompleteLines =
+      autocompleteCount > 0 && autocompleteCount < rendered.length
+        ? rendered.slice(-autocompleteCount)
+        : [];
+
+    if (editorFrame.length < 2) return clampRenderedLines(rendered, width);
+
+    const editorLines = editorFrame.slice(1, -1);
+    const metadata = this.renderMetadata();
+    const lines = ["", ...editorLines, "", metadata];
+    const top = this.renderBorder(width);
+    const bottom = this.renderBorder(width);
+
+    return clampRenderedLines(
+      [
+        top,
+        ...lines.map((line) => `${rail}${this.fillLine(line, innerWidth)}`),
+        bottom,
+        ...autocompleteLines,
+      ],
+      width,
+    );
+  }
+
+  private renderRail(): string {
+    return this.labelTheme.fg("accent", "│") + RAIL_GAP;
+  }
+
+  private renderBorder(width: number): string {
+    return this.labelTheme.fg("borderMuted", "─".repeat(Math.max(0, width)));
+  }
+
+  private fillLine(content: string, width: number): string {
+    return padRight(truncateToWidth(content, Math.max(0, width), ""), width);
+  }
+
+  private renderMetadata(): string {
+    const { meta } = this.getChrome();
+    const separator = this.labelTheme.fg("borderMuted", "  ");
     return [
-      this.renderRule(lineWidth, labels.top),
-      ...bodyLines.map(wrapLine),
-      ...(suggestionLines.length > 0
-        ? [
-            this.renderSectionSeparator(lineWidth, "󰳽 auto-suggestions"),
-            wrapLine(""),
-            ...suggestionLines.map(wrapLine),
-            wrapLine(""),
-          ]
-        : []),
-      this.renderRule(lineWidth, labels.bottom),
-    ];
-  }
-
-  private renderSectionSeparator(lineWidth: number, label: string): string {
-    const labelText = ` ${label} `;
-    const styledLabel = this.labelTheme.fg("dim", labelText);
-    const prefix = "──";
-    const fill = Math.max(0, lineWidth - visibleWidth(labelText) - visibleWidth(prefix));
-    return this.borderColor(prefix) + styledLabel + this.borderColor("─".repeat(fill));
-  }
-
-  private renderRule(lineWidth: number, line: BorderLine): string {
-    return renderBorderLine({
-      lineWidth,
-      line,
-      separator: separator(this.labelTheme),
-      borderColor: (text) => this.borderColor(text),
-    });
+      meta.modelLabel,
+      meta.providerLabel,
+      meta.thinkingLabel,
+      ...meta.quotaLabels,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join(separator);
   }
 }

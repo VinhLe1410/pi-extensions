@@ -1,100 +1,144 @@
 import { execFile } from "node:child_process";
-import type { GitCache } from "../core/types";
+import { promisify } from "node:util";
 
-const EMPTY_GIT_CACHE: GitCache = {
-  branch: null,
-  dirty: false,
-  ahead: 0,
-  behind: 0,
+const execFileAsync = promisify(execFile);
+
+export type GitStatusSummary = {
+  branch?: string;
+  dirty: boolean;
+  ahead: number;
+  behind: number;
+  conflicted: number;
+  untracked: number;
+  stashed: boolean;
+  modified: number;
+  staged: number;
+  renamed: number;
+  deleted: number;
+  typechanged: number;
 };
 
 export interface GitState {
-  refresh(): Promise<boolean>;
-  current(): GitCache;
+  refresh(cwd: string): Promise<boolean>;
+  current(): GitStatusSummary;
 }
 
-function parseGitStatus(output: string): GitCache {
-  let branch: string | null = null;
-  let dirty = false;
-  let ahead = 0;
-  let behind = 0;
+export function emptyGitStatus(): GitStatusSummary {
+  return {
+    branch: undefined,
+    dirty: false,
+    ahead: 0,
+    behind: 0,
+    conflicted: 0,
+    untracked: 0,
+    stashed: false,
+    modified: 0,
+    staged: 0,
+    renamed: 0,
+    deleted: 0,
+    typechanged: 0,
+  };
+}
 
-  for (const line of output.split("\n")) {
+export function parseGitStatusPorcelain(
+  stdoutText: string,
+  hasStash: boolean,
+): GitStatusSummary {
+  const status = emptyGitStatus();
+  status.stashed = hasStash;
+
+  for (const line of stdoutText.split(/\r?\n/)) {
     if (!line) continue;
-
     if (line.startsWith("# branch.head ")) {
-      const head = line.slice("# branch.head ".length).trim();
-      branch = head && head !== "(detached)" ? head : null;
+      const branch = line.slice("# branch.head ".length).trim();
+      status.branch = branch && branch !== "(detached)" ? branch : undefined;
       continue;
     }
-
     if (line.startsWith("# branch.ab ")) {
-      const match = line.match(/^# branch\.ab \+(\d+) -(\d+)$/);
+      const match = line.match(/\+(\d+)\s+-(\d+)/);
       if (match) {
-        ahead = parseInt(match[1], 10) || 0;
-        behind = parseInt(match[2], 10) || 0;
+        status.ahead = Number(match[1] ?? 0);
+        status.behind = Number(match[2] ?? 0);
       }
       continue;
     }
+    if (line.startsWith("#")) continue;
 
-    if (!line.startsWith("# ")) dirty = true;
+    status.dirty = true;
+
+    if (line.startsWith("? ")) {
+      status.untracked += 1;
+      continue;
+    }
+    if (line.startsWith("u ")) {
+      status.conflicted += 1;
+      continue;
+    }
+    if (!(line.startsWith("1 ") || line.startsWith("2 "))) continue;
+
+    const xy = line.split(" ")[1] ?? "..";
+    const x = xy[0] ?? ".";
+    const y = xy[1] ?? ".";
+
+    if (x === "R") status.renamed += 1;
+    else if (x === "D") status.deleted += 1;
+    else if (x === "T") status.typechanged += 1;
+    else if (x !== "." && x !== " ") status.staged += 1;
+
+    if (y === "M") status.modified += 1;
+    else if (y === "D") status.deleted += 1;
+    else if (y === "T") status.typechanged += 1;
   }
 
-  return { branch, dirty, ahead, behind };
+  return status;
 }
 
-function sameGitCache(a: GitCache | null, b: GitCache | null): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
+export async function readGitStatus(cwd: string): Promise<GitStatusSummary> {
+  try {
+    const [{ stdout: statusStdout }, stashResult] = await Promise.all([
+      execFileAsync("git", ["status", "--porcelain=2", "--branch"], { cwd }),
+      execFileAsync("git", ["rev-parse", "--verify", "--quiet", "refs/stash"], {
+        cwd,
+      }).catch(() => ({ stdout: "" })),
+    ]);
+    const stdoutText = typeof statusStdout === "string" ? statusStdout : String(statusStdout);
+    const stashStdout =
+      typeof stashResult.stdout === "string" ? stashResult.stdout : String(stashResult.stdout);
+    return parseGitStatusPorcelain(stdoutText, stashStdout.trim().length > 0);
+  } catch {
+    return emptyGitStatus();
+  }
+}
+
+function sameGitStatus(a: GitStatusSummary, b: GitStatusSummary): boolean {
   return (
     a.branch === b.branch &&
     a.dirty === b.dirty &&
     a.ahead === b.ahead &&
-    a.behind === b.behind
+    a.behind === b.behind &&
+    a.conflicted === b.conflicted &&
+    a.untracked === b.untracked &&
+    a.stashed === b.stashed &&
+    a.modified === b.modified &&
+    a.staged === b.staged &&
+    a.renamed === b.renamed &&
+    a.deleted === b.deleted &&
+    a.typechanged === b.typechanged
   );
 }
 
-function readGitStatus(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      "git",
-      ["status", "--porcelain=v2", "--branch"],
-      {
-        encoding: "utf8",
-        timeout: 1000,
-        windowsHide: true,
-      },
-      (error, stdout) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve(stdout);
-      },
-    );
-  });
-}
-
 export function createGitState(): GitState {
-  let cache: GitCache | null = null;
+  let cache = emptyGitStatus();
 
   return {
-    async refresh(): Promise<boolean> {
-      let next: GitCache | null = null;
-
-      try {
-        const status = await readGitStatus();
-        next = parseGitStatus(status.trimEnd());
-      } catch {
-        next = null;
-      }
-
-      const changed = !sameGitCache(cache, next);
+    async refresh(cwd: string): Promise<boolean> {
+      const next = await readGitStatus(cwd);
+      const changed = !sameGitStatus(cache, next);
       cache = next;
       return changed;
     },
-    current(): GitCache {
-      return cache ?? EMPTY_GIT_CACHE;
+    current(): GitStatusSummary {
+      return cache;
     },
   };
 }
