@@ -1,0 +1,18 @@
+{
+  "name": "pi-usage-heatmap",
+  "private": true,
+  "description": "Pi command for a current-year assistant output token heatmap",
+  "type": "module",
+  "dependencies": {
+    "date-fns": "^4.1.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

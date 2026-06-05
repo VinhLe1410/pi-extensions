@@ -3,6 +3,7 @@ packages:
   - pi-git-commit
   - pi-prompt-ui
   - pi-subagents
+  - pi-usage-heatmap
   - pi-whimsical
 allowBuilds:
   "@google/genai": true
