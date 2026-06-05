@@ -6,11 +6,10 @@
  * 54+ configurable patterns.
  *
  * Commands (with autocomplete):
- *   /loader pattern <name>  - Switch pattern
- *   /loader color <color>            - Set color (name, #hex, or 0-255 ANSI)
- *   /loader preview [name]      - Preview animation (Esc close, ←→ pattern, ↑↓ color)
- *   /loader speed <n>           - Set speed multiplier (0.25-10.0)
- *   /loader reset           - Reset to defaults
+ *   /loader preview  - Pick pattern, color, and speed
+ *   /loader on       - Re-enable loader
+ *   /loader off      - Restore default spinner
+ *   /loader reset    - Reset to defaults
  */
 
 import type { ExtensionAPI, ExtensionContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
@@ -256,110 +255,32 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("loader", {
-    description: "Configure pi-loader (pattern, color, speed)",
+    description: "Configure pi-loader",
     getArgumentCompletions: (prefix: string): AutocompleteItem[] | null => {
       const subs: AutocompleteItem[] = [
-        { value: "preview ", label: "preview — pick pattern/color/speed" },
-        { value: "pattern ", label: "pattern — switch animation" },
-        { value: "color ",   label: "color — set color (name/#hex/0-255)" },
-        { value: "speed ",   label: "speed — set speed" },
-        { value: "off",      label: "off — restore default spinner" },
-        { value: "on",       label: "on — re-enable loader" },
-        { value: "reset",    label: "reset — defaults" },
+        { value: "preview", label: "preview — pick pattern/color/speed" },
+        { value: "on",      label: "on — re-enable loader" },
+        { value: "off",     label: "off — restore default spinner" },
+        { value: "reset",   label: "reset — defaults" },
       ];
       if (!prefix) return subs;
-
-      const parts = prefix.split(/\s+/);
-      if (parts.length >= 2) {
-        const sub = parts[0]!;
-        const arg = parts.slice(1).join(" ");
-        if (sub === "pattern") {
-          return PATTERN_KEYS.filter((k) => k.startsWith(arg)).map((k) => ({
-            value: `${sub} ${k}`,
-            label: `${k} — ${PATTERNS[k]!.name}`,
-          }));
-        }
-        if (sub === "color") {
-          return (COLORS as readonly string[])
-            .filter((c) => c.startsWith(arg))
-            .map((c) => ({ value: `${sub} ${c}`, label: c }));
-        }
-        return null;
-      }
+      if (prefix.trim().includes(" ")) return null;
       const filtered = subs.filter((s) => s.value.startsWith(prefix));
       return filtered.length > 0 ? filtered : null;
     },
     handler: async (args, ctx) => {
-      const parts = args.trim().split(/\s+/);
+      const trimmed = args.trim();
+      const parts = trimmed ? trimmed.split(/\s+/) : [];
       const sub = parts[0]?.toLowerCase();
-      const value = parts.slice(1).join(" ");
+      const hasExtraArgs = parts.length > 1;
+      const usage = "/loader [preview|on|off|reset]";
+
+      if (hasExtraArgs) {
+        ctx.ui.notify(usage, "info");
+        return;
+      }
 
       switch (sub) {
-        case "pattern": {
-          const key = value.toLowerCase();
-          if (!key || !PATTERNS[key]) {
-            ctx.ui.notify(
-              PATTERN_KEYS.map((k) => `  ${k} — ${PATTERNS[k]!.name}`).join("\n"),
-              "info",
-            );
-            return;
-          }
-          config.pattern = key;
-          saveConfig(config);
-          apply(ctx);
-          ctx.ui.notify(`Pattern → ${PATTERNS[key]!.name}`, "info");
-          return;
-        }
-        case "color": {
-          if (!value) {
-            ctx.ui.notify(
-              `/loader color <name|#hex|0-255>  (${config.color})\n` +
-              `Named: ${COLORS.join(", ")}\n` +
-              `Ex: accent, 196, #ff6600`,
-              "info",
-            );
-            return;
-          }
-          if ((COLORS as readonly string[]).includes(value)) {
-            config.color = value;
-            saveConfig(config);
-            apply(ctx);
-            return;
-          }
-          if (/^#[0-9a-fA-F]{6}$/.test(value)) {
-            config.color = value;
-            saveConfig(config);
-            apply(ctx);
-            return;
-          }
-          if (/^\d{1,3}$/.test(value)) {
-            const n = parseInt(value, 10);
-            if (n >= 0 && n <= 255) {
-              config.color = value;
-              saveConfig(config);
-              apply(ctx);
-              return;
-            }
-          }
-          ctx.ui.notify(
-            `/loader color <name|#hex|0-255>  (${config.color})\n` +
-            `Named: ${COLORS.join(", ")}\n` +
-            `Ex: accent, 196, #ff6600`,
-            "info",
-          );
-          return;
-        }
-        case "speed": {
-          const n = parseFloat(value);
-          if (isNaN(n) || n < 0.25 || n > 10.0) {
-            ctx.ui.notify(`/loader speed <0.25-10.0>  (${config.speed}x)`, "info");
-            return;
-          }
-          config.speed = n;
-          saveConfig(config);
-          apply(ctx);
-          return;
-        }
         case "off": {
           disabled = true;
           ctx.ui.setWorkingIndicator();
@@ -377,9 +298,7 @@ export default function (pi: ExtensionAPI) {
             ctx.ui.notify("/loader preview requires interactive TUI mode", "error");
             return;
           }
-          const startIdx = value
-            ? Math.max(0, PATTERN_KEYS.indexOf(value.toLowerCase()))
-            : Math.max(0, PATTERN_KEYS.indexOf(config.pattern));
+          const startIdx = Math.max(0, PATTERN_KEYS.indexOf(config.pattern));
           const previewColors = [...PREVIEW_COLORS];
           if (!previewColors.includes(config.color)) previewColors.push(config.color);
           await ctx.ui.custom<void>(
@@ -413,8 +332,7 @@ export default function (pi: ExtensionAPI) {
         default: {
           const p = PATTERNS[config.pattern];
           ctx.ui.notify(
-            `/loader [pattern|color|preview|speed|reset]\n` +
-              `${p?.name ?? config.pattern} · ${config.color} · ${config.speed}x`,
+            `${usage}\n${p?.name ?? config.pattern} · ${config.color} · ${config.speed}x`,
             "info",
           );
         }

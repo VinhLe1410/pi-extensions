@@ -35,12 +35,10 @@ cp index.ts patterns.ts ~/.pi/agent/extensions/pi-loader/
 
 | Command | Description |
 |---|---|
-| `/loader pattern <name>` | Switch animation pattern |
-| `/loader color <color>` | Set color (name, `#hex`, or `0-255` ANSI) |
-| `/loader speed <n>` | Set speed multiplier (0.25–10.0) |
 | `/loader preview` | Interactive gallery with live preview |
+| `/loader on` | Re-enable loader |
+| `/loader off` | Disable loader and restore Pi's default spinner |
 | `/loader reset` | Restore defaults |
-| `/loader off` / `on` | Disable / re-enable |
 
 ### Preview mode
 
