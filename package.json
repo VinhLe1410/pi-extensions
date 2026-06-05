@@ -7,9 +7,9 @@
     "test": "vitest run --exclude \"pi-subagents/test/**\""
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.75.5",
-    "@earendil-works/pi-coding-agent": "^0.75.5",
-    "@earendil-works/pi-tui": "^0.75.5",
+    "@earendil-works/pi-ai": "^0.78.0",
+    "@earendil-works/pi-coding-agent": "^0.78.0",
+    "@earendil-works/pi-tui": "^0.78.0",
     "@types/node": "25.7.0",
     "typebox": "^1.1.33",
     "typescript": "^5.0.0",
