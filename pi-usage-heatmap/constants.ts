@@ -1,0 +1,8 @@
+export const CELL_WIDTH = 2;
+export const MINIMUM_WIDTH_PADDING = 6;
+export const MONTH_GAP_WIDTH = 1;
+export const MONTHS_PER_YEAR = 12;
+export const NON_ZERO_LEVELS = 8;
+export const FALLBACK_ACCENT = "#61afef";
+export const WEEK_STARTS_ON = 1 as const;
+export const FILE_SCAN_CONCURRENCY = 8;
