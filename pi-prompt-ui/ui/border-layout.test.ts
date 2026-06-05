@@ -50,13 +50,13 @@ describe("renderBorderLine", () => {
     expect(withoutUsage).not.toContain("weekly");
   });
 
-  it("drops bottom-like cwd before context before branch", () => {
+  it("drops bottom-like cwd before branch before context", () => {
     const line: BorderLine = {
       left: [
         { id: "branch", text: "branch", priority: 30 },
         { id: "cwd", text: "~repo", priority: 10 },
       ],
-      right: [{ id: "context", text: "context", priority: 20 }],
+      right: [{ id: "context", text: "context", priority: 40 }],
     };
 
     const withoutCwd = stripAnsi(render(24, line));
@@ -64,10 +64,10 @@ describe("renderBorderLine", () => {
     expect(withoutCwd).not.toContain("~repo");
     expect(withoutCwd).toContain("context");
 
-    const withoutContext = stripAnsi(render(14, line));
-    expect(withoutContext).toContain("branch");
-    expect(withoutContext).not.toContain("~repo");
-    expect(withoutContext).not.toContain("context");
+    const onlyContext = stripAnsi(render(14, line));
+    expect(onlyContext).not.toContain("branch");
+    expect(onlyContext).not.toContain("~repo");
+    expect(onlyContext).toContain("context");
   });
 
   it("drops an item instead of rendering adjacent left and right groups without a border bridge", () => {

@@ -17,8 +17,8 @@ const TOP_MODEL_PRIORITY = 50;
 const TOP_THINKING_PRIORITY = 40;
 const TOP_SESSION_USAGE_PRIORITY = 20;
 const TOP_WEEKLY_USAGE_PRIORITY = 10;
+const BOTTOM_CONTEXT_PRIORITY = 40;
 const BOTTOM_BRANCH_PRIORITY = 30;
-const BOTTOM_CONTEXT_PRIORITY = 20;
 const BOTTOM_CWD_PRIORITY = 10;
 
 function renderThinking(theme: Theme, thinkingLevel: string): string {
@@ -26,11 +26,16 @@ function renderThinking(theme: Theme, thinkingLevel: string): string {
   return theme.fg(thinkingColor(thinkingLevel), `󰌶 ${label}`);
 }
 
-function renderUsageWindow(theme: Theme, window: RateWindow): string {
+function renderUsageWindow(
+  theme: Theme,
+  window: RateWindow,
+  thinkingLevel: string,
+): string {
   const rounded = Math.round(window.usedPercent);
   const pct = theme.fg(percentColor(rounded), `${rounded}%`);
   const reset = window.resetsIn
-    ? " " + theme.fg("dim", `${RESET_ICON} ${window.resetsIn}`)
+    ? " " +
+      theme.fg(thinkingColor(thinkingLevel), `${RESET_ICON} ${window.resetsIn}`)
     : "";
   return `${pct}${reset}`;
 }
@@ -76,23 +81,23 @@ export function getThinkingLevel(ctx: ExtensionContext): string {
   return buildSessionContext(entries, leafId).thinkingLevel || "off";
 }
 
-function getContextInfo(ctx: ExtensionContext): {
-  percentage: number;
-  used: number;
-  total: number;
-} {
+function getContextPercentage(ctx: ExtensionContext): number {
   const usage = ctx.getContextUsage();
   const total = usage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
   const used = usage?.tokens ?? 0;
-  const percentage = usage?.percent ?? (total > 0 ? (used / total) * 100 : 0);
-  return { percentage, used, total };
+  return usage?.percent ?? (total > 0 ? (used / total) * 100 : 0);
 }
 
-function renderContextWindow(ctx: ExtensionContext, theme: Theme): string {
-  const { percentage, used, total } = getContextInfo(ctx);
-  const value = total > 0 ? `${used}/${total}` : "?";
+function renderContextWindow(
+  ctx: ExtensionContext,
+  theme: Theme,
+  thinkingLevel: string,
+): string {
+  const percentage = getContextPercentage(ctx);
+  const value = `${Math.round(percentage)}%`;
   return (
-    theme.fg("dim", "context: ") + theme.fg(contextColor(percentage), value)
+    theme.fg(thinkingColor(thinkingLevel), "context: ") +
+    theme.fg(contextColor(percentage), value)
   );
 }
 
@@ -124,7 +129,7 @@ export function buildBorderLabels(
   const topRight: BorderItem[] = usageWindows(usageState.current()).map(
     (window, index) => ({
       id: `usage:${index}:${window.label}`,
-      text: renderUsageWindow(theme, window),
+      text: renderUsageWindow(theme, window, thinkingLevel),
       priority: usageWindowPriority(window),
     }),
   );
@@ -161,7 +166,7 @@ export function buildBorderLabels(
       right: [
         {
           id: "context",
-          text: renderContextWindow(ctx, theme),
+          text: renderContextWindow(ctx, theme, thinkingLevel),
           priority: BOTTOM_CONTEXT_PRIORITY,
         },
       ],
