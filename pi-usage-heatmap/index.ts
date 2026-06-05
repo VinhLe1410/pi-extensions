@@ -3,8 +3,6 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui";
 import {
   addDays,
-  differenceInCalendarDays,
-  endOfWeek,
   format,
   isAfter,
   startOfDay,
@@ -14,6 +12,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 
 const CELL_WIDTH = 2;
+const MONTH_GAP_WIDTH = 1;
 const MONTHS_PER_YEAR = 12;
 const FALLBACK_ACCENT = "#61afef";
 const WEEK_STARTS_ON = 1 as const;
@@ -43,7 +42,7 @@ type AssistantUsageRecord = {
 
 type Rgb = { r: number; g: number; b: number };
 type Hsl = { h: number; s: number; l: number };
-type MonthRange = { month: number; monthIndex: number; start: Date; weeks: number; padStart: boolean; padEnd: boolean };
+type MonthSpan = { start: number; end: number };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -346,66 +345,78 @@ function centerLine(line: string, width: number): string {
   return `${" ".repeat(Math.floor((width - lineWidth) / 2))}${line}`;
 }
 
-function centerPlain(text: string, width: number): string {
-  const textWidth = visibleWidth(text);
-  if (textWidth >= width) return fit(text, width);
-  const left = Math.floor((width - textWidth) / 2);
-  const right = width - textWidth - left;
-  return `${" ".repeat(left)}${text}${" ".repeat(right)}`;
-}
-
 function monthLabel(month: number): string {
-  if (month < 10) return `[ ${month} ]`;
-  const text = String(month);
-  return `[${text[0]} ${text[1]}]`;
+  return format(new Date(2000, month - 1, 1), "MMM");
 }
 
-function getMonthRanges(year: number): MonthRange[] {
-  return Array.from({ length: MONTHS_PER_YEAR }, (_, monthIndex) => {
-    const monthStart = new Date(year, monthIndex, 1);
-    const monthEnd = new Date(year, monthIndex + 1, 0);
-    const start = startOfWeek(monthStart, { weekStartsOn: WEEK_STARTS_ON });
-    const end = endOfWeek(monthEnd, { weekStartsOn: WEEK_STARTS_ON });
-    const weeks = Math.floor(differenceInCalendarDays(end, start) / 7) + 1;
-    return {
-      month: monthIndex + 1,
-      monthIndex,
-      start,
-      weeks,
-      padStart: monthStart.getDay() === WEEK_STARTS_ON,
-      padEnd: monthEnd.getDay() === 0,
-    };
-  });
+function firstWeekdayOfYear(year: number, weekdayIndex: number): Date {
+  const firstDay = startOfDay(new Date(year, 0, 1));
+  const offset = (weekdayIndex - firstDay.getDay() + 7) % 7;
+  return addDays(firstDay, offset);
 }
 
-function shouldAddLeadingPad(monthRanges: MonthRange[], index: number): boolean {
-  return monthRanges[index]!.padStart && !monthRanges[index - 1]?.padEnd;
+function getWeekdayDates(year: number, row: number): Date[] {
+  const weekdayIndex = (row + WEEK_STARTS_ON) % 7;
+  const dates: Date[] = [];
+  for (let day = firstWeekdayOfYear(year, weekdayIndex); day.getFullYear() === year; day = addDays(day, 7)) {
+    dates.push(day);
+  }
+  return dates;
 }
 
-function monthRangeWidth(monthRanges: MonthRange[], index: number): number {
-  const range = monthRanges[index]!;
-  return (range.weeks + (shouldAddLeadingPad(monthRanges, index) ? 1 : 0) + (range.padEnd ? 1 : 0)) * CELL_WIDTH;
+function leadingYearBlankWidth(year: number, row: number): number {
+  const firstWeekStart = startOfWeek(new Date(year, 0, 1), { weekStartsOn: WEEK_STARTS_ON });
+  const rowDate = addDays(firstWeekStart, row);
+  return rowDate.getFullYear() === year ? 0 : CELL_WIDTH;
 }
 
-function graphWidthForMonths(monthRanges: MonthRange[]): number {
-  const cellsWidth = monthRanges.reduce((sum, _range, index) => sum + monthRangeWidth(monthRanges, index), 0);
-  return 4 + cellsWidth;
+function buildMonthSpans(year: number): { spans: MonthSpan[]; width: number } {
+  const spans = Array.from({ length: MONTHS_PER_YEAR }, () => ({ start: Number.POSITIVE_INFINITY, end: 0 }));
+  let width = 0;
+
+  for (let row = 0; row < 7; row++) {
+    let cursor = leadingYearBlankWidth(year, row);
+    const dates = getWeekdayDates(year, row);
+    for (let i = 0; i < dates.length; i++) {
+      const day = dates[i]!;
+      const monthSpan = spans[day.getMonth()]!;
+      monthSpan.start = Math.min(monthSpan.start, cursor);
+      monthSpan.end = Math.max(monthSpan.end, cursor + CELL_WIDTH);
+      cursor += CELL_WIDTH;
+
+      const next = dates[i + 1];
+      if (next && next.getMonth() !== day.getMonth()) cursor += MONTH_GAP_WIDTH;
+    }
+    width = Math.max(width, cursor);
+  }
+
+  return {
+    spans: spans.map((span) => span.start === Number.POSITIVE_INFINITY ? { start: 0, end: 0 } : span),
+    width,
+  };
 }
 
 function minimumWidthForYear(year: number): number {
-  return graphWidthForMonths(getMonthRanges(year));
+  return 4 + buildMonthSpans(year).width;
 }
 
 function minimumWidthMessage(year: number): string {
   return `Minimum of ${minimumWidthForYear(year)} columns to view`;
 }
 
-function renderMonthLabels(theme: Theme, monthRanges: MonthRange[]): string {
-  const body = monthRanges
-    .map((range, index) => centerPlain(monthLabel(range.month), monthRangeWidth(monthRanges, index)))
-    .join("");
+function renderMonthLabels(theme: Theme, spans: MonthSpan[], bodyWidth: number): string {
+  const chars = Array.from({ length: bodyWidth }, () => " ");
 
-  return `    ${theme.fg("muted", body)}`;
+  for (let monthIndex = 0; monthIndex < spans.length; monthIndex++) {
+    const span = spans[monthIndex]!;
+    const label = monthLabel(monthIndex + 1);
+    const labelStart = span.start + Math.max(0, Math.floor((span.end - span.start - label.length) / 2));
+    for (let i = 0; i < label.length && labelStart + i < chars.length; i++) {
+      chars[labelStart + i] = label[i]!;
+    }
+  }
+
+  return `    ${theme.fg("muted", chars.join(""))}`;
 }
 
 function renderFooterLines(stats: UsageStats, width: number): string[] {
@@ -425,8 +436,8 @@ function renderFooterLines(stats: UsageStats, width: number): string[] {
 
 function buildHeatmapLines(stats: UsageStats, theme: Theme, width: number): string[] {
   const today = startOfDay(stats.generatedAt);
-  const monthRanges = getMonthRanges(stats.year);
-  const graphWidth = graphWidthForMonths(monthRanges);
+  const { spans, width: bodyWidth } = buildMonthSpans(stats.year);
+  const graphWidth = 4 + bodyWidth;
   const indent = " ".repeat(Math.max(0, Math.floor((width - graphWidth) / 2)));
   const styles = makeLevelStyles(theme);
   const levelFor = createLevelResolver(stats.days);
@@ -435,30 +446,22 @@ function buildHeatmapLines(stats: UsageStats, theme: Theme, width: number): stri
 
   lines.push(centerLine(`${theme.fg("accent", theme.bold("Usage heatmap"))} ${theme.fg("muted", "assistant output tokens")}`, width));
   lines.push("");
-  lines.push(fit(indent + renderMonthLabels(theme, monthRanges), width));
+  lines.push(fit(indent + renderMonthLabels(theme, spans, bodyWidth), width));
 
   for (let row = 0; row < 7; row++) {
     const label = dayLabels[row] ? theme.fg("muted", dayLabels[row]!.padEnd(4)) : "    ";
-    let line = indent + label;
+    let line = indent + label + " ".repeat(leadingYearBlankWidth(stats.year, row));
+    const dates = getWeekdayDates(stats.year, row);
 
-    for (let rangeIndex = 0; rangeIndex < monthRanges.length; rangeIndex++) {
-      const range = monthRanges[rangeIndex]!;
-      if (shouldAddLeadingPad(monthRanges, rangeIndex)) line += " ".repeat(CELL_WIDTH);
+    for (let i = 0; i < dates.length; i++) {
+      const day = dates[i]!;
+      const key = format(day, "yyyy-MM-dd");
+      const output = isAfter(day, today) ? 0 : stats.days.get(key) ?? 0;
+      const level = isAfter(day, today) ? 0 : levelFor(output);
+      line += styles[level]!("■".repeat(CELL_WIDTH));
 
-      for (let col = 0; col < range.weeks; col++) {
-        const day = startOfDay(addDays(range.start, col * 7 + row));
-        if (day.getFullYear() !== stats.year || day.getMonth() !== range.monthIndex) {
-          line += " ".repeat(CELL_WIDTH);
-          continue;
-        }
-
-        const key = format(day, "yyyy-MM-dd");
-        const output = isAfter(day, today) ? 0 : stats.days.get(key) ?? 0;
-        const level = isAfter(day, today) ? 0 : levelFor(output);
-        line += styles[level]!("■".repeat(CELL_WIDTH));
-      }
-
-      if (range.padEnd) line += " ".repeat(CELL_WIDTH);
+      const next = dates[i + 1];
+      if (next && next.getMonth() !== day.getMonth()) line += " ".repeat(MONTH_GAP_WIDTH);
     }
 
     lines.push(fit(line, width));
