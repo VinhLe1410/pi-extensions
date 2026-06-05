@@ -22,7 +22,6 @@ import { PolishedInputEditor } from "./ui/editor";
 import { buildEditorMeta, getThinkingLevel } from "./ui/editor-meta";
 import { registerPromptUiSettingsCommand } from "./ui/settings-command";
 import { renderStatusFooter } from "./ui/status-footer";
-import { installUserMessageStyle } from "./ui/user-message";
 
 function detectProvider(modelProvider: string | undefined): string | null {
   return modelProvider ? PROVIDER_MAP[modelProvider] || null : null;
@@ -57,7 +56,6 @@ export default function (pi: ExtensionAPI) {
   let requestFooterRender: (() => void) | undefined;
   let getActiveExtensionStatuses: () => ReadonlyMap<string, string> = () => new Map();
   let cleanupUsageListener: (() => void) | undefined;
-  let cleanupUserMessageStyle: (() => void) | undefined;
 
   function scheduleProjectRefresh(cwd = activeCwd): void {
     if (!cwd) return;
@@ -132,8 +130,6 @@ export default function (pi: ExtensionAPI) {
     startProjectRefresh(ctx.cwd);
     startUsageForProvider(ctx.model?.provider);
     cleanupUsageListener?.();
-    cleanupUserMessageStyle?.();
-    cleanupUserMessageStyle = installUserMessageStyle(() => ctx.ui.theme);
 
     ctx.ui.setEditorComponent((tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
       cleanupUsageListener?.();
@@ -183,8 +179,6 @@ export default function (pi: ExtensionAPI) {
     stopProjectRefresh();
     cleanupUsageListener?.();
     cleanupUsageListener = undefined;
-    cleanupUserMessageStyle?.();
-    cleanupUserMessageStyle = undefined;
     requestFooterRender = undefined;
     getActiveExtensionStatuses = () => new Map();
     activeTui = undefined;
