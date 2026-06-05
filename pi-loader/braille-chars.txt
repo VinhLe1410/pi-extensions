@@ -1,0 +1,75 @@
+BRAILLE CHARACTER REFERENCE for pi-loader (4×4 braille dot loader)
+=========================================================
+
+Each loader frame is 2 braille characters, side by side.
+The left char encodes columns 0-1, the right char encodes columns 2-3.
+
+DOT NUMBERING (within one 2×4 cell):
+    ┌───┬───┐
+    │ 0 │ 3 │
+    ├───┼───┤
+    │ 1 │ 4 │
+    ├───┼───┤
+    │ 2 │ 5 │
+    ├───┼───┤
+    │ 6 │ 7 │
+    └───┴───┘
+
+To compute a character: String.fromCodePoint(0x2800 + sum_of_dot_numbers)
+
+Rows 0-3 = dots 0,1,2,6 (left column) and 3,4,5,7 (right column)
+in the final 2-char frame.
+
+─────────────────────────────────────────────────────────
+
+NO DOTS 6 or 7 (U+2800 - U+283F):
+
+   ⠀  ⠁  ⠂  ⠃  ⠄  ⠅  ⠆  ⠇  ⠈  ⠉  ⠊  ⠋  ⠌  ⠍  ⠎  ⠏
+   ⠐  ⠑  ⠒  ⠓  ⠔  ⠕  ⠖  ⠗  ⠘  ⠙  ⠚  ⠛  ⠜  ⠝  ⠞  ⠟
+   ⠠  ⠡  ⠢  ⠣  ⠤  ⠥  ⠦  ⠧  ⠨  ⠩  ⠪  ⠫  ⠬  ⠭  ⠮  ⠯
+   ⠰  ⠱  ⠲  ⠳  ⠴  ⠵  ⠶  ⠷  ⠸  ⠹  ⠺  ⠻  ⠼  ⠽  ⠾  ⠿
+
+DOT 6 ONLY (U+2840 - U+287F):
+
+   ⡀  ⡁  ⡂  ⡃  ⡄  ⡅  ⡆  ⡇  ⡈  ⡉  ⡊  ⡋  ⡌  ⡍  ⡎  ⡏
+   ⡐  ⡑  ⡒  ⡓  ⡔  ⡕  ⡖  ⡗  ⡘  ⡙  ⡚  ⡛  ⡜  ⡝  ⡞  ⡟
+   ⡠  ⡡  ⡢  ⡣  ⡤  ⡥  ⡦  ⡧  ⡨  ⡩  ⡪  ⡫  ⡬  ⡭  ⡮  ⡯
+   ⡰  ⡱  ⡲  ⡳  ⡴  ⡵  ⡶  ⡷  ⡸  ⡹  ⡺  ⡻  ⡼  ⡽  ⡾  ⡿
+
+DOT 7 ONLY (U+2880 - U+28BF):
+
+   ⢀  ⢁  ⢂  ⢃  ⢄  ⢅  ⢆  ⢇  ⢈  ⢉  ⢊  ⢋  ⢌  ⢍  ⢎  ⢏
+   ⢐  ⢑  ⢒  ⢓  ⢔  ⢕  ⢖  ⢗  ⢘  ⢙  ⢚  ⢛  ⢜  ⢝  ⢞  ⢟
+   ⢠  ⢡  ⢢  ⢣  ⢤  ⢥  ⢦  ⢧  ⢨  ⢩  ⢪  ⢫  ⢬  ⢭  ⢮  ⢯
+   ⢰  ⢱  ⢲  ⢳  ⢴  ⢵  ⢶  ⢷  ⢸  ⢹  ⢺  ⢻  ⢼  ⢽  ⢾  ⢿
+
+DOTS 6+7 (U+28C0 - U+28FF):
+
+   ⣀  ⣁  ⣂  ⣃  ⣄  ⣅  ⣆  ⣇  ⣈  ⣉  ⣊  ⣋  ⣌  ⣍  ⣎  ⣏
+   ⣐  ⣑  ⣒  ⣓  ⣔  ⣕  ⣖  ⣗  ⣘  ⣙  ⣚  ⣛  ⣜  ⣝  ⣞  ⣟
+   ⣠  ⣡  ⣢  ⣣  ⣤  ⣥  ⣦  ⣧  ⣨  ⣩  ⣪  ⣫  ⣬  ⣭  ⣮  ⣯
+   ⣰  ⣱  ⣲  ⣳  ⣴  ⣵  ⣶  ⣷  ⣸  ⣹  ⣺  ⣻  ⣼  ⣽  ⣾  ⣿
+
+─────────────────────────────────────────────────────────
+
+HOW TO BUILD A FRAME:
+
+Your loader shows 2 braille chars = your 4×4 grid.
+
+Left char = columns 0-1 of your grid
+Right char = columns 2-3 of your grid
+
+For the left char, ON dots are:
+  dot 0 = row0 col0    dot 3 = row0 col1
+  dot 1 = row1 col0    dot 4 = row1 col1
+  dot 2 = row2 col0    dot 5 = row2 col1
+  dot 6 = row3 col0    dot 7 = row3 col1
+
+For the right char, same but for columns 2-3.
+
+Find the char above that matches your ON dots, put them together:
+  frame = leftChar + rightChar   (e.g. "⡱⢎")
+
+Then register as a raw pattern:
+  "my-pattern": { type: "raw", name: "My Pattern",
+    frames: ["⡱⢎", "⢎⡱", ...], defaultSpeed: 1.0 },
