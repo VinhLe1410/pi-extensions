@@ -43,13 +43,12 @@ function usageWindows(snapshot: UsageSnapshot | null): RateWindow[] {
 
 function renderQuotaWindow(theme: Theme, window: RateWindow): string {
   const rounded = Math.round(window.usedPercent);
-  const label = window.label ? theme.fg("muted", `${window.label}: `) : "";
   const pct = theme.fg(percentColor(rounded), `${rounded}%`);
   const reset = window.resetsIn
     ? theme.fg("dim", ` ${RESET_ICON} ${window.resetsIn}`)
     : "";
 
-  return `${label}${pct}${reset}`;
+  return `${pct}${reset}`;
 }
 
 export function getThinkingLevel(ctx: ExtensionContext): string {
@@ -72,6 +71,7 @@ export function buildEditorMeta(
   return {
     modelLabel: theme.fg("accent", modelLabel),
     providerLabel: theme.fg("text", providerLabel),
+    thinkingLevel,
     thinkingLabel:
       thinkingLevel && thinkingLevel !== "off"
         ? theme.fg(thinkingColor(thinkingLevel), thinkingLevel)

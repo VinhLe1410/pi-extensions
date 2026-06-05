@@ -42,8 +42,9 @@ describe("buildEditorMeta", () => {
 
     expect(meta.modelLabel).toBe("Claude Sonnet");
     expect(meta.providerLabel).toBe("Anthropic");
+    expect(meta.thinkingLevel).toBe("high");
     expect(meta.thinkingLabel).toBe("high");
-    expect(meta.quotaLabels).toEqual(["5h: 42%  2h"]);
+    expect(meta.quotaLabels).toEqual(["42%  2h"]);
   });
 
   it("keeps only the Copilot premium quota window", () => {
@@ -62,7 +63,8 @@ describe("buildEditorMeta", () => {
     );
 
     expect(meta.providerLabel).toBe("Copilot");
+    expect(meta.thinkingLevel).toBe("off");
     expect(meta.thinkingLabel).toBeUndefined();
-    expect(meta.quotaLabels).toEqual(["Premium: 20%"]);
+    expect(meta.quotaLabels).toEqual(["20%"]);
   });
 });

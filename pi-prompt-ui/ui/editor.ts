@@ -13,6 +13,7 @@ const RAIL_GAP = " ";
 export interface EditorMeta {
   modelLabel: string;
   providerLabel: string;
+  thinkingLevel: string;
   thinkingLabel?: string;
   quotaLabels: string[];
 }
@@ -55,6 +56,7 @@ export class PolishedInputEditor extends CustomEditor {
   render(width: number): string[] {
     if (width <= 2) return clampRenderedLines(super.render(width), width);
 
+    const { meta } = this.getChrome();
     const rail = this.renderRail();
     const railWidth = visibleWidth(rail);
     const innerWidth = Math.max(1, width - railWidth);
@@ -85,7 +87,7 @@ export class PolishedInputEditor extends CustomEditor {
     if (editorFrame.length < 2) return clampRenderedLines(rendered, width);
 
     const editorLines = editorFrame.slice(1, -1);
-    const metadata = this.renderMetadata();
+    const metadata = this.renderMetadata(meta, innerWidth);
     const lines = ["", ...editorLines, "", metadata];
     const top = this.renderBorder(width);
     const bottom = this.renderBorder(width);
@@ -102,7 +104,7 @@ export class PolishedInputEditor extends CustomEditor {
   }
 
   private renderRail(): string {
-    return this.labelTheme.fg("accent", "│") + RAIL_GAP;
+    return this.borderColor("│") + RAIL_GAP;
   }
 
   private renderBorder(width: number): string {
@@ -113,16 +115,25 @@ export class PolishedInputEditor extends CustomEditor {
     return padRight(truncateToWidth(content, Math.max(0, width), ""), width);
   }
 
-  private renderMetadata(): string {
-    const { meta } = this.getChrome();
+  private renderMetadata(meta: EditorMeta, width: number): string {
     const separator = this.labelTheme.fg("borderMuted", "  ");
-    return [
-      meta.modelLabel,
-      meta.providerLabel,
-      meta.thinkingLabel,
-      ...meta.quotaLabels,
-    ]
+    const left = [meta.modelLabel, meta.providerLabel, meta.thinkingLabel]
       .filter((part): part is string => Boolean(part))
       .join(separator);
+    const right = meta.quotaLabels.join(separator);
+
+    if (!right) return left;
+    if (!left) return truncateToWidth(right, width, "");
+
+    const leftWidth = visibleWidth(left);
+    const rightWidth = visibleWidth(right);
+    const gapWidth = width - leftWidth - rightWidth;
+    if (gapWidth > 0) return `${left}${" ".repeat(gapWidth)}${right}`;
+
+    const minimumGap = 1;
+    const availableLeftWidth = width - rightWidth - minimumGap;
+    if (availableLeftWidth <= 0) return truncateToWidth(right, width, "");
+
+    return `${truncateToWidth(left, availableLeftWidth, "")}${" ".repeat(minimumGap)}${right}`;
   }
 }
