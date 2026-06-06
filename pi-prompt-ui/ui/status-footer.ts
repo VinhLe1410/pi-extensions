@@ -97,6 +97,15 @@ function renderTerminalStyle(style: string, text: string): string {
   return codes.length ? `\x1b[${codes.join(";")}m${text}\x1b[0m` : text;
 }
 
+function renderLoadingBar(frame: string | undefined, trackChar: string, theme: Theme): string {
+  if (!frame) return "";
+
+  const dot = Array.from(trackChar)[0] ?? "·";
+  return Array.from(frame)
+    .map((char) => theme.fg(char === dot ? "dim" : "accent", char))
+    .join("");
+}
+
 function renderCwd(ctx: ExtensionContext, theme: Theme): string {
   return theme.fg("accent", `󰝰 ${formatCwdLabel(ctx.cwd)}`);
 }
@@ -307,12 +316,18 @@ export function renderStatusFooter(
   config: PromptUiConfig,
   width: number,
   theme: Theme,
+  loadingBarFrame?: string,
 ): string[] {
   if (width <= 0) return [""];
 
   const separator = theme.fg("dim", FOOTER_SEPARATOR);
   const totals = getUsageTotals(ctx);
-  const left = [renderCwd(ctx, theme), renderBranch(git, theme), renderRuntime(runtime, theme)]
+  const left = [
+    renderLoadingBar(loadingBarFrame, config.loadingBar.trackChar, theme),
+    renderCwd(ctx, theme),
+    renderBranch(git, theme),
+    renderRuntime(runtime, theme),
+  ]
     .filter(Boolean)
     .join(" ");
   const right = [renderContext(ctx, theme), renderTokens(totals, theme), renderCost(totals.cost, theme)].join(

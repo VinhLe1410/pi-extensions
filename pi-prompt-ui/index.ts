@@ -20,6 +20,7 @@ import { readRuntimeInfo, type RuntimeInfo } from "./seams/runtime";
 import { createUsageState } from "./seams/usage-state";
 import { PolishedInputEditor } from "./ui/editor";
 import { buildEditorMeta, getThinkingLevel } from "./ui/editor-meta";
+import { createLoadingBarFrames } from "./ui/loading-bar";
 import { registerPromptUiSettingsCommand } from "./ui/settings-command";
 import { renderStatusFooter } from "./ui/status-footer";
 
@@ -56,6 +57,58 @@ export default function (pi: ExtensionAPI) {
   let requestFooterRender: (() => void) | undefined;
   let getActiveExtensionStatuses: () => ReadonlyMap<string, string> = () => new Map();
   let cleanupUsageListener: (() => void) | undefined;
+  let hasPromptUi = false;
+  let loadingTimer: ReturnType<typeof setInterval> | undefined;
+  let loadingActive = false;
+  let loadingFrameIndex = 0;
+  let loadingFrames = createLoadingBarFrames(currentConfig.loadingBar);
+
+  function requestUiRender(): void {
+    if (activeTui) {
+      activeTui.requestRender();
+      return;
+    }
+    requestFooterRender?.();
+  }
+
+  function refreshLoadingFrames(): void {
+    loadingFrames = createLoadingBarFrames(currentConfig.loadingBar);
+    loadingFrameIndex = loadingFrames.length > 0 ? loadingFrameIndex % loadingFrames.length : 0;
+  }
+
+  function currentLoadingFrame(): string | undefined {
+    if (!loadingActive || loadingFrames.length === 0) return undefined;
+    return loadingFrames[loadingFrameIndex] ?? loadingFrames[0];
+  }
+
+  function stopLoadingBar(render = true): void {
+    const wasRunning = loadingActive || loadingTimer !== undefined;
+    if (loadingTimer) {
+      clearInterval(loadingTimer);
+      loadingTimer = undefined;
+    }
+    loadingActive = false;
+    loadingFrameIndex = 0;
+    if (render && wasRunning) requestUiRender();
+  }
+
+  function startLoadingBar(): void {
+    if (!hasPromptUi) return;
+
+    stopLoadingBar(false);
+    refreshLoadingFrames();
+    if (loadingFrames.length === 0) return;
+
+    loadingActive = true;
+    loadingFrameIndex = 0;
+    loadingTimer = setInterval(() => {
+      if (loadingFrames.length === 0) return;
+      loadingFrameIndex = (loadingFrameIndex + 1) % loadingFrames.length;
+      requestUiRender();
+    }, currentConfig.loadingBar.intervalMs);
+    loadingTimer.unref?.();
+    requestUiRender();
+  }
 
   function scheduleProjectRefresh(cwd = activeCwd): void {
     if (!cwd) return;
@@ -125,8 +178,12 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_start", (_event, ctx) => {
-    if (!ctx.hasUI) return;
+    if (!ctx.hasUI) {
+      hasPromptUi = false;
+      return;
+    }
 
+    hasPromptUi = ctx.mode === "tui";
     startProjectRefresh(ctx.cwd);
     startUsageForProvider(ctx.model?.provider);
     cleanupUsageListener?.();
@@ -169,6 +226,7 @@ export default function (pi: ExtensionAPI) {
             currentConfig,
             width,
             theme,
+            currentLoadingFrame(),
           );
         },
       };
@@ -176,13 +234,23 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", () => {
+    stopLoadingBar(false);
     stopProjectRefresh();
     cleanupUsageListener?.();
     cleanupUsageListener = undefined;
     requestFooterRender = undefined;
     getActiveExtensionStatuses = () => new Map();
     activeTui = undefined;
+    hasPromptUi = false;
     usage.stop();
+  });
+
+  pi.on("agent_start", () => {
+    startLoadingBar();
+  });
+
+  pi.on("agent_end", () => {
+    stopLoadingBar();
   });
 
   pi.on("turn_end", () => {

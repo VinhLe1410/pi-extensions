@@ -13,6 +13,10 @@ const theme = {
   fg: (_color: string, text: string) => text,
 } as Theme;
 
+const markerTheme = {
+  fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+} as Theme;
+
 function footerData(statuses: Record<string, string> = {}): ReadonlyFooterDataProvider {
   return {
     getGitBranch: () => null,
@@ -116,5 +120,37 @@ describe("renderStatusFooter", () => {
     const middleLine = render({ lsp: "middle", worker: "off" });
     expect(middleLine).toContain(" LSP");
     expect(middleLine).not.toContain("active");
+  });
+
+  it("prepends the active loading bar frame before cwd", () => {
+    const [line] = renderStatusFooter(
+      ctx(),
+      footerData(),
+      git,
+      runtime,
+      config(),
+      180,
+      theme,
+      "··░▒▓█▓▒░·",
+    );
+
+    expect(line).toContain("··░▒▓█▓▒░· 󰝰 project");
+  });
+
+  it("renders loading bar dots dim and moving glyphs accent", () => {
+    const [line] = renderStatusFooter(
+      ctx(),
+      footerData(),
+      git,
+      runtime,
+      config(),
+      180,
+      markerTheme,
+      "·░█·",
+    );
+
+    expect(line).toContain(
+      "<dim>·</dim><accent>░</accent><accent>█</accent><dim>·</dim> <accent>󰝰 project</accent>",
+    );
   });
 });

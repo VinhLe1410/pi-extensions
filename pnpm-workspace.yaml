@@ -1,7 +1,6 @@
 packages:
   - pi-codex-search
   - pi-git-commit
-  - pi-loader
   - pi-prompt-ui
   - pi-subagents
   - pi-usage-heatmap

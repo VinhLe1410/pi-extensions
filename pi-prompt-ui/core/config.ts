@@ -23,14 +23,26 @@ export type ExtensionStatusesConfig = {
   placements: Record<string, ExtensionStatusPlacement>;
 };
 
+export type LoadingBarConfig = {
+  enabled: boolean;
+  intervalMs: number;
+  trackWidth: number;
+  trackChar: string;
+  kernel: string;
+};
+
 export type PromptUiConfig = {
   projectRefreshIntervalMs: number;
   extensionStatuses: ExtensionStatusesConfig;
+  loadingBar: LoadingBarConfig;
 };
 
 type ConfigRecord = Record<string, unknown>;
 
 const MIN_PROJECT_REFRESH_INTERVAL_MS = 5_000;
+const MIN_LOADING_BAR_INTERVAL_MS = 50;
+const MAX_LOADING_BAR_INTERVAL_MS = 1_000;
+const MAX_LOADING_BAR_TRACK_WIDTH = 40;
 
 export const configPath = join(getAgentDir(), "prompt-ui.json");
 
@@ -39,6 +51,13 @@ export const defaultConfig: PromptUiConfig = {
   extensionStatuses: {
     defaultPlacement: "right",
     placements: {},
+  },
+  loadingBar: {
+    enabled: true,
+    intervalMs: 50,
+    trackWidth: 10,
+    trackChar: "·",
+    kernel: "░▒▓█▓▒░",
   },
 };
 
@@ -66,6 +85,55 @@ function parseProjectRefreshIntervalMs(value: unknown): number {
   return interval >= MIN_PROJECT_REFRESH_INTERVAL_MS
     ? interval
     : defaultConfig.projectRefreshIntervalMs;
+}
+
+function parseLoadingBarIntervalMs(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return defaultConfig.loadingBar.intervalMs;
+  }
+
+  const interval = Math.round(value);
+  return interval >= MIN_LOADING_BAR_INTERVAL_MS && interval <= MAX_LOADING_BAR_INTERVAL_MS
+    ? interval
+    : defaultConfig.loadingBar.intervalMs;
+}
+
+function parseLoadingBarTrackWidth(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return defaultConfig.loadingBar.trackWidth;
+  }
+
+  const width = Math.round(value);
+  return width > 0 && width <= MAX_LOADING_BAR_TRACK_WIDTH
+    ? width
+    : defaultConfig.loadingBar.trackWidth;
+}
+
+function parseFirstChar(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  return Array.from(value)[0] ?? fallback;
+}
+
+function parseKernel(value: unknown): string {
+  if (typeof value !== "string" || Array.from(value).length === 0) {
+    return defaultConfig.loadingBar.kernel;
+  }
+  return value;
+}
+
+function normalizeLoadingBar(record: unknown): LoadingBarConfig {
+  const loadingBar = isRecord(record) ? record : {};
+
+  return {
+    enabled:
+      typeof loadingBar.enabled === "boolean"
+        ? loadingBar.enabled
+        : defaultConfig.loadingBar.enabled,
+    intervalMs: parseLoadingBarIntervalMs(loadingBar.intervalMs),
+    trackWidth: parseLoadingBarTrackWidth(loadingBar.trackWidth),
+    trackChar: parseFirstChar(loadingBar.trackChar, defaultConfig.loadingBar.trackChar),
+    kernel: parseKernel(loadingBar.kernel),
+  };
 }
 
 export function isExtensionStatusPlacement(
@@ -105,6 +173,7 @@ export function mergeConfig(parsed: unknown): PromptUiConfig {
       defaultPlacement: extensionStatuses.defaultPlacement,
       placements: { ...extensionStatuses.placements },
     },
+    loadingBar: normalizeLoadingBar(config.loadingBar),
   };
 }
 
