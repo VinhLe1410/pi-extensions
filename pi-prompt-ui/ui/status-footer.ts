@@ -50,15 +50,16 @@ function formatQuotaWindowLabel(label: string): string {
 
 function renderQuotaBadge(window: RateWindow, theme: Theme): string {
   const rounded = Math.max(0, Math.min(999, Math.round(window.usedPercent)));
-  const reset = window.resetsIn ? theme.fg("dim", ` ${RESET_ICON} ${window.resetsIn}`) : "";
-  const content = [
-    theme.fg("muted", ` ${formatQuotaWindowLabel(window.label)} `),
-    theme.bold(theme.fg(percentColor(rounded), `${rounded}%`)),
-    reset,
-    " ",
-  ].join("");
+  const label = theme.bg(
+    "toolPendingBg",
+    theme.bold(theme.fg("muted", ` ${formatQuotaWindowLabel(window.label)} `)),
+  );
+  const percent = theme.inverse(theme.bold(theme.fg(percentColor(rounded), ` ${rounded}% `)));
+  const reset = window.resetsIn
+    ? theme.bg("toolPendingBg", theme.fg("text", ` ${RESET_ICON} ${window.resetsIn} `))
+    : "";
 
-  return theme.bg("toolPendingBg", content);
+  return `${label}${percent}${reset}`;
 }
 
 function renderQuotaBadges(snapshot: UsageSnapshot | null, theme: Theme): string {
