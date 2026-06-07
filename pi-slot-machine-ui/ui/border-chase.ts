@@ -74,24 +74,7 @@ export function rgbBg(rgb: Rgb, text: string): string {
 }
 
 export function heavyBorderChar(char: string): string {
-  switch (char) {
-    case "─":
-      return "━";
-    case "┌":
-      return "┏";
-    case "┐":
-      return "┓";
-    case "└":
-      return "┗";
-    case "┘":
-      return "┛";
-    case "├":
-      return "┣";
-    case "┤":
-      return "┫";
-    default:
-      return char;
-  }
+  return char === "─" ? "━" : char;
 }
 
 export type { Rgb };

@@ -126,7 +126,7 @@ export class PolishedInputEditor extends CustomEditor {
     );
 
     if (hasSuggestions) {
-      rows.push(this.renderSuggestionDivider(width, lines.length, rowCount, chase));
+      rows.push(this.renderSuggestionDivider(width));
       rows.push(
         ...autocompleteLines.map((line, index) =>
           this.renderContentRow(line, lines.length + 1 + index, rowCount, width, innerWidth, chase),
@@ -172,7 +172,7 @@ export class PolishedInputEditor extends CustomEditor {
     innerWidth: number,
     chase?: BorderChase,
   ): string {
-    return `${this.renderRail(rowIndex, rowCount, width, chase)}${this.fillLine(line, innerWidth)}${this.renderRightRail(rowIndex, rowCount, width, chase)}`;
+    return `${this.renderRail(rowIndex, rowCount, width, chase)}${this.fillLine(line, innerWidth)}${this.renderRightRail(rowIndex, width, chase)}`;
   }
 
   private renderRail(
@@ -185,45 +185,21 @@ export class PolishedInputEditor extends CustomEditor {
       return this.renderRailBackgroundCell("border") + RAIL_GAP;
     }
 
-    return this.renderLeftRailCell(rowIndex, rowCount, width, chase) + RAIL_GAP;
+    const pathIndex = width * 2 + rowCount + (rowCount - 1 - rowIndex);
+    return this.renderRailCell(pathIndex, chase) + RAIL_GAP;
   }
 
-  private renderRightRail(
-    rowIndex?: number,
-    _rowCount?: number,
-    width?: number,
-    chase?: BorderChase,
-  ): string {
+  private renderRightRail(rowIndex?: number, width?: number, chase?: BorderChase): string {
     if (rowIndex === undefined || width === undefined) {
       return RIGHT_RAIL_GAP + this.renderRailBackgroundCell("border");
     }
 
-    return RIGHT_RAIL_GAP + this.renderRightRailCell(rowIndex, width, chase);
-  }
-
-  private renderLeftRailCell(
-    rowIndex: number,
-    rowCount: number,
-    width: number,
-    chase?: BorderChase,
-  ): string {
-    const pathIndex = width * 2 + rowCount + (rowCount - 1 - rowIndex);
-    return this.renderRailCell(pathIndex, chase);
-  }
-
-  private renderRightRailCell(
-    rowIndex: number,
-    width: number,
-    chase?: BorderChase,
-  ): string {
     const pathIndex = width + rowIndex;
-    return this.renderRailCell(pathIndex, chase);
+    return RIGHT_RAIL_GAP + this.renderRailCell(pathIndex, chase);
   }
 
   private renderTopBorder(width: number, chase?: BorderChase, workingMessage?: string): string {
-    const chars: string[] = Array.from({ length: Math.max(0, width) }, (_, index) =>
-      width <= 1 ? "─" : index === 0 ? "┌" : index === width - 1 ? "┐" : "─",
-    );
+    const chars: string[] = Array.from({ length: Math.max(0, width) }, () => "─");
 
     if (workingMessage && width >= 8) {
       const text = truncateToWidth(workingMessage, Math.max(0, width - 4), "");
@@ -243,31 +219,16 @@ export class PolishedInputEditor extends CustomEditor {
       .join("");
   }
 
-  private renderSuggestionDivider(
-    width: number,
-    rowIndex: number,
-    rowCount: number,
-    chase?: BorderChase,
-  ): string {
-    return Array.from({ length: Math.max(0, width) }, (_, index) => {
-      if (width <= 1) return this.labelTheme.fg("borderMuted", "─");
-      if (index === 0) {
-        const pathIndex = width * 2 + rowCount + (rowCount - 1 - rowIndex);
-        return this.renderBorderCell("├", pathIndex, chase, "border");
-      }
-      if (index === width - 1) {
-        const pathIndex = width + rowIndex;
-        return this.renderBorderCell("┤", pathIndex, chase, "border");
-      }
-      return this.labelTheme.fg("borderMuted", "─");
-    }).join("");
+  private renderSuggestionDivider(width: number): string {
+    return Array.from({ length: Math.max(0, width) }, () =>
+      this.labelTheme.fg("borderMuted", "─"),
+    ).join("");
   }
 
   private renderBottomBorder(width: number, rowCount: number, chase?: BorderChase): string {
     return Array.from({ length: Math.max(0, width) }, (_, index) => {
-      const char = width <= 1 ? "─" : index === 0 ? "└" : index === width - 1 ? "┘" : "─";
       const pathIndex = width + rowCount + (width - 1 - index);
-      return this.renderBorderCell(char, pathIndex, chase, "borderMuted");
+      return this.renderBorderCell("─", pathIndex, chase, "borderMuted");
     }).join("");
   }
 
@@ -345,7 +306,7 @@ export class PolishedInputEditor extends CustomEditor {
     baseColor: "border" | "borderMuted",
   ): string {
     const accent = this.themeRgb("borderAccent");
-    const base = baseColor === "border" ? this.currentBorderRgb() : this.themeRgb(baseColor);
+    const base = this.themeRgb(baseColor);
     const isHead = distance <= chase.headLength;
     const glyph = distance <= chase.heavyLength ? heavyBorderChar(char) : char;
     const intensity = isHead ? 1 : 1 - distance / (chase.trailLength + 1);
