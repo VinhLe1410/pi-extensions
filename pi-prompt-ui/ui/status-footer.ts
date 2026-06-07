@@ -6,89 +6,15 @@ import type {
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { PromptUiConfig } from "../core/config";
 import type { RateWindow, UsageSnapshot } from "../core/types";
-import type { GitStatusSummary } from "../seams/git";
-import type { RuntimeInfo } from "../seams/runtime";
 import { collectExtensionStatusSegments } from "./extension-status";
 import { percentColor, RESET_ICON } from "./theme";
 
 const FOOTER_SEPARATOR = " | ";
 
-const terminalColorCodes = new Map([
-  ["black", 30],
-  ["red", 31],
-  ["green", 32],
-  ["yellow", 33],
-  ["blue", 34],
-  ["purple", 35],
-  ["cyan", 36],
-  ["white", 37],
-  ["bright-black", 90],
-  ["bright-red", 91],
-  ["bright-green", 92],
-  ["bright-yellow", 93],
-  ["bright-blue", 94],
-  ["bright-purple", 95],
-  ["bright-cyan", 96],
-  ["bright-white", 97],
-]);
-
-const terminalStyleModifiers = new Map([
-  ["bold", 1],
-  ["dim", 2],
-  ["dimmed", 2],
-  ["italic", 3],
-  ["underline", 4],
-]);
-
 function formatCwdLabel(cwd: string): string {
   const normalized = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
   const parts = normalized.split("/").filter(Boolean);
   return parts[parts.length - 1] ?? cwd;
-}
-
-function isHexColor(value: string): boolean {
-  return /^#(?:[0-9a-fA-F]{6})$/.test(value);
-}
-
-function terminalColorToAnsi(color: string, isBackground = false): string | undefined {
-  const normalized = color.toLowerCase();
-  const colorCode = terminalColorCodes.get(normalized);
-  if (colorCode !== undefined) return `${isBackground ? colorCode + 10 : colorCode}`;
-
-  if (/^(?:[0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/.test(normalized)) {
-    return `${isBackground ? 48 : 38};5;${normalized}`;
-  }
-
-  if (isHexColor(normalized)) {
-    const r = Number.parseInt(normalized.slice(1, 3), 16);
-    const g = Number.parseInt(normalized.slice(3, 5), 16);
-    const b = Number.parseInt(normalized.slice(5, 7), 16);
-    return `${isBackground ? 48 : 38};2;${r};${g};${b}`;
-  }
-
-  return undefined;
-}
-
-function renderTerminalStyle(style: string, text: string): string {
-  const codes: string[] = [];
-  for (const token of style.trim().split(/\s+/)) {
-    if (!token) continue;
-
-    const normalized = token.toLowerCase();
-    const modifier = terminalStyleModifiers.get(normalized);
-    if (modifier !== undefined) {
-      codes.push(`${modifier}`);
-      continue;
-    }
-
-    const isForeground = normalized.startsWith("fg:");
-    const isBackground = normalized.startsWith("bg:");
-    const colorName = isForeground || isBackground ? normalized.slice(3) : normalized;
-    const color = terminalColorToAnsi(colorName, isBackground);
-    if (color) codes.push(color);
-  }
-
-  return codes.length ? `\x1b[${codes.join(";")}m${text}\x1b[0m` : text;
 }
 
 function renderLoadingBar(frame: string | undefined, trackChar: string, theme: Theme): string {
@@ -102,44 +28,6 @@ function renderLoadingBar(frame: string | undefined, trackChar: string, theme: T
 
 function renderCwd(ctx: ExtensionContext, theme: Theme): string {
   return theme.fg("accent", `󰝰 ${formatCwdLabel(ctx.cwd)}`);
-}
-
-function renderGitStatus(git: GitStatusSummary, theme: Theme): string {
-  const status = [
-    git.conflicted > 0 ? "=" : "",
-    git.stashed ? "$" : "",
-    git.deleted > 0 ? "✘" : "",
-    git.renamed > 0 ? "»" : "",
-    git.modified > 0 ? "!" : "",
-    git.typechanged > 0 ? "T" : "",
-    git.staged > 0 ? "+" : "",
-    git.untracked > 0 ? "?" : "",
-  ].join("");
-  const aheadBehind =
-    git.ahead > 0 && git.behind > 0
-      ? "⇕"
-      : git.ahead > 0
-        ? "↑"
-        : git.behind > 0
-          ? "↓"
-          : "";
-
-  return status || aheadBehind ? theme.fg("warning", `[${status}${aheadBehind}]`) : "";
-}
-
-function renderBranch(git: GitStatusSummary, theme: Theme): string {
-  if (!git.branch) return "";
-
-  return ["on", theme.fg("success", ` ${git.branch}`), renderGitStatus(git, theme)]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function renderRuntime(runtime: RuntimeInfo | undefined, theme: Theme): string {
-  if (!runtime) return "";
-
-  const label = runtime.version ? `${runtime.symbol} ${runtime.version}` : runtime.symbol;
-  return `${theme.fg("dim", "via")} ${renderTerminalStyle(runtime.style, label)}`;
 }
 
 function usageWindows(snapshot: UsageSnapshot | null): RateWindow[] {
@@ -304,8 +192,6 @@ function composeFooter(
 export function renderStatusFooter(
   ctx: ExtensionContext,
   footerData: ReadonlyFooterDataProvider,
-  git: GitStatusSummary,
-  runtime: RuntimeInfo | undefined,
   config: PromptUiConfig,
   usageSnapshot: UsageSnapshot | null,
   width: number,
@@ -318,8 +204,6 @@ export function renderStatusFooter(
   const left = [
     renderLoadingBar(loadingBarFrame, config.loadingBar.trackChar, theme),
     renderCwd(ctx, theme),
-    renderBranch(git, theme),
-    renderRuntime(runtime, theme),
   ]
     .filter(Boolean)
     .join(" ");

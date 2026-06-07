@@ -17,10 +17,18 @@ export interface EditorContextMeter {
   label: string;
 }
 
+export interface EditorBranchMeta {
+  name: string;
+  dirty: boolean;
+  ahead: number;
+  behind: number;
+}
+
 export interface EditorMeta {
   modelLabel: string;
   thinkingLevel: string;
   contextMeter?: EditorContextMeter;
+  branch?: EditorBranchMeta;
 }
 
 export interface EditorChrome {
@@ -122,6 +130,14 @@ export class PolishedInputEditor extends CustomEditor {
 
   private renderMetadata(meta: EditorMeta, width: number): string {
     const left = this.renderIdentityBadge(meta);
+    const right = meta.branch ? this.renderBranchBadge(meta.branch) : "";
+
+    if (!right) return truncateToWidth(left, width, "");
+
+    const leftWidth = visibleWidth(left);
+    const rightWidth = visibleWidth(right);
+    const gapWidth = width - leftWidth - rightWidth;
+    if (gapWidth >= 2) return `${left}${" ".repeat(gapWidth)}${right}`;
 
     return truncateToWidth(left, width, "");
   }
@@ -145,6 +161,21 @@ export class PolishedInputEditor extends CustomEditor {
         this.labelTheme.fg(thinkingColor(thinkingLevel), ` ${thinkingLevel.toUpperCase()} `),
       ),
     );
+  }
+
+  private renderBranchBadge(branch: EditorBranchMeta): string {
+    const color = branch.dirty ? "warning" : "success";
+    const ahead = branch.ahead > 0 ? this.labelTheme.fg("success", ` ↑${branch.ahead}`) : "";
+    const behind = branch.behind > 0 ? this.labelTheme.fg("error", ` ↓${branch.behind}`) : "";
+    const dirty = branch.dirty ? this.labelTheme.fg("warning", " *") : "";
+
+    return [
+      this.labelTheme.fg(color, " "),
+      this.labelTheme.bold(this.labelTheme.fg(color, branch.name)),
+      dirty,
+      ahead,
+      behind,
+    ].join("");
   }
 
   private renderContextMeter(meter: EditorContextMeter): string {

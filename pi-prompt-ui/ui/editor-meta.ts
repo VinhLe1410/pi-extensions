@@ -1,10 +1,9 @@
 import {
   buildSessionContext,
   type ExtensionContext,
-  type Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { UsageState } from "../seams/usage-state";
-import type { EditorContextMeter, EditorMeta } from "./editor";
+import type { GitStatusSummary } from "../seams/git";
+import type { EditorBranchMeta, EditorContextMeter, EditorMeta } from "./editor";
 
 function formatContextWindow(value: number): string {
   if (value >= 1_000_000) {
@@ -47,10 +46,20 @@ export function getThinkingLevel(ctx: ExtensionContext): string {
   return buildSessionContext(entries, leafId).thinkingLevel || "off";
 }
 
+function buildBranchMeta(git: GitStatusSummary): EditorBranchMeta | undefined {
+  if (!git.branch) return undefined;
+
+  return {
+    name: git.branch,
+    dirty: git.dirty,
+    ahead: git.ahead,
+    behind: git.behind,
+  };
+}
+
 export function buildEditorMeta(
   ctx: ExtensionContext,
-  _theme: Theme,
-  _usageState: UsageState,
+  git: GitStatusSummary,
   thinkingLevel = getThinkingLevel(ctx),
 ): EditorMeta {
   const modelLabel = ctx.model?.name ?? ctx.model?.id ?? "no-model";
@@ -59,5 +68,6 @@ export function buildEditorMeta(
     modelLabel,
     thinkingLevel,
     contextMeter: buildContextMeter(ctx),
+    branch: buildBranchMeta(git),
   };
 }

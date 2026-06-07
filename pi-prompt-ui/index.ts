@@ -16,7 +16,6 @@ import {
 import { createFetcherRegistry } from "./fetchers";
 import { createAuthResolver } from "./seams/auth";
 import { createGitState } from "./seams/git";
-import { readRuntimeInfo, type RuntimeInfo } from "./seams/runtime";
 import { createUsageState } from "./seams/usage-state";
 import { PolishedInputEditor } from "./ui/editor";
 import { buildEditorMeta, getThinkingLevel } from "./ui/editor-meta";
@@ -26,17 +25,6 @@ import { renderStatusFooter } from "./ui/status-footer";
 
 function detectProvider(modelProvider: string | undefined): string | null {
   return modelProvider ? PROVIDER_MAP[modelProvider] || null : null;
-}
-
-function sameRuntime(a: RuntimeInfo | undefined, b: RuntimeInfo | undefined): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  return (
-    a.name === b.name &&
-    a.symbol === b.symbol &&
-    a.style === b.style &&
-    a.version === b.version
-  );
 }
 
 export default function (pi: ExtensionAPI) {
@@ -53,7 +41,6 @@ export default function (pi: ExtensionAPI) {
   let projectRefreshTimer: ReturnType<typeof setInterval> | undefined;
   let projectRefreshInFlight = false;
   let projectRefreshPending = false;
-  let runtime: RuntimeInfo | undefined;
   let requestFooterRender: (() => void) | undefined;
   let getActiveExtensionStatuses: () => ReadonlyMap<string, string> = () => new Map();
   let cleanupUsageListener: (() => void) | undefined;
@@ -118,11 +105,10 @@ export default function (pi: ExtensionAPI) {
     }
 
     projectRefreshInFlight = true;
-    Promise.all([git.refresh(cwd), readRuntimeInfo(cwd)])
-      .then(([gitChanged, nextRuntime]) => {
-        const runtimeChanged = !sameRuntime(runtime, nextRuntime);
-        runtime = nextRuntime;
-        if (gitChanged || runtimeChanged) activeTui?.requestRender();
+    git
+      .refresh(cwd)
+      .then((gitChanged) => {
+        if (gitChanged) activeTui?.requestRender();
       })
       .finally(() => {
         projectRefreshInFlight = false;
@@ -153,7 +139,6 @@ export default function (pi: ExtensionAPI) {
     projectRefreshInFlight = false;
     projectRefreshPending = false;
     activeCwd = undefined;
-    runtime = undefined;
   }
 
   function startUsageForProvider(modelProvider: string | undefined): void {
@@ -200,7 +185,7 @@ export default function (pi: ExtensionAPI) {
         () => {
           const thinkingLevel = getThinkingLevel(ctx);
           return {
-            meta: buildEditorMeta(ctx, ctx.ui.theme, usage, thinkingLevel),
+            meta: buildEditorMeta(ctx, git.current(), thinkingLevel),
           };
         },
         ctx.ui.theme,
@@ -221,8 +206,6 @@ export default function (pi: ExtensionAPI) {
           return renderStatusFooter(
             ctx,
             footerData,
-            git.current(),
-            runtime,
             currentConfig,
             usage.current(),
             width,
