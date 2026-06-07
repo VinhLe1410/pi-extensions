@@ -10,6 +10,7 @@ import {
 import { contextColor, thinkingColor } from "./theme";
 
 const RAIL_GAP = " ";
+const RIGHT_RAIL_GAP = " ";
 const CONTEXT_METER_WIDTH = 18;
 
 export interface EditorContextMeter {
@@ -71,8 +72,10 @@ export class PolishedInputEditor extends CustomEditor {
 
     const { meta } = this.getChrome();
     const rail = this.renderRail();
+    const rightRail = this.renderRightRail();
     const railWidth = visibleWidth(rail);
-    const innerWidth = Math.max(1, width - railWidth);
+    const rightRailWidth = visibleWidth(rightRail);
+    const innerWidth = Math.max(1, width - railWidth - rightRailWidth);
     const rendered = super.render(innerWidth);
     const editorInternals = this as unknown as AutocompleteEditorInternals;
     const isShowingAutocomplete =
@@ -102,13 +105,13 @@ export class PolishedInputEditor extends CustomEditor {
     const editorLines = editorFrame.slice(1, -1);
     const metadata = this.renderMetadata(meta, innerWidth);
     const lines = ["", ...editorLines, "", metadata];
-    const top = this.renderBorder(width);
-    const bottom = this.renderBorder(width);
+    const top = this.renderTopBorder(width);
+    const bottom = this.renderBottomBorder(width);
 
     return clampRenderedLines(
       [
         top,
-        ...lines.map((line) => `${rail}${this.fillLine(line, innerWidth)}`),
+        ...lines.map((line) => `${rail}${this.fillLine(line, innerWidth)}${rightRail}`),
         bottom,
         ...autocompleteLines,
       ],
@@ -120,8 +123,18 @@ export class PolishedInputEditor extends CustomEditor {
     return this.borderColor("│") + RAIL_GAP;
   }
 
-  private renderBorder(width: number): string {
-    return this.labelTheme.fg("borderMuted", "─".repeat(Math.max(0, width)));
+  private renderRightRail(): string {
+    return RIGHT_RAIL_GAP + this.borderColor("│");
+  }
+
+  private renderTopBorder(width: number): string {
+    if (width <= 1) return this.labelTheme.fg("borderMuted", "─".repeat(Math.max(0, width)));
+    return this.labelTheme.fg("borderMuted", `┌${"─".repeat(Math.max(0, width - 2))}┐`);
+  }
+
+  private renderBottomBorder(width: number): string {
+    if (width <= 1) return this.labelTheme.fg("borderMuted", "─".repeat(Math.max(0, width)));
+    return this.labelTheme.fg("borderMuted", `└${"─".repeat(Math.max(0, width - 2))}┘`);
   }
 
   private fillLine(content: string, width: number): string {
