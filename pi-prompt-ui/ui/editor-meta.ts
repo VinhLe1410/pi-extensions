@@ -3,29 +3,40 @@ import {
   type ExtensionContext,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { RateWindow, UsageSnapshot } from "../core/types";
 import type { UsageState } from "../seams/usage-state";
-import { percentColor, RESET_ICON } from "./theme";
-import type { EditorMeta } from "./editor";
+import type { EditorContextMeter, EditorMeta } from "./editor";
 
-function usageWindows(snapshot: UsageSnapshot | null): RateWindow[] {
-  if (!snapshot) return [];
-  if (snapshot.provider.toLowerCase() === "copilot") {
-    return snapshot.windows.filter(
-      (window) => window.label.toLowerCase() === "premium",
-    );
+function formatContextWindow(value: number): string {
+  if (value >= 1_000_000) {
+    const millions = value / 1_000_000;
+    const rounded =
+      millions < 10 ? millions.toFixed(1).replace(/\.0$/, "") : `${Math.round(millions)}`;
+    return `${rounded}M`;
   }
-  return snapshot.windows;
+
+  if (value >= 1_000) {
+    const thousands = value / 1_000;
+    const rounded =
+      thousands < 10 ? thousands.toFixed(1).replace(/\.0$/, "") : `${Math.round(thousands)}`;
+    return `${rounded}K`;
+  }
+
+  return `${Math.round(value)}`;
 }
 
-function renderQuotaWindow(theme: Theme, window: RateWindow): string {
-  const rounded = Math.round(window.usedPercent);
-  const pct = theme.fg(percentColor(rounded), `${rounded}%`);
-  const reset = window.resetsIn
-    ? theme.fg("dim", ` ${RESET_ICON} ${window.resetsIn}`)
-    : "";
+function buildContextMeter(ctx: ExtensionContext): EditorContextMeter | undefined {
+  const usage = ctx.getContextUsage();
+  const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow;
+  if (!contextWindow || contextWindow <= 0) return undefined;
 
-  return `${pct}${reset}`;
+  const tokens = usage?.tokens ?? 0;
+  const percent = usage?.percent ?? (tokens / contextWindow) * 100;
+  const roundedPercent = Math.max(0, Math.min(999, Math.round(percent)));
+
+  return {
+    percent: roundedPercent,
+    label: `${roundedPercent}%/${formatContextWindow(contextWindow)}`,
+  };
 }
 
 export function getThinkingLevel(ctx: ExtensionContext): string {
@@ -38,8 +49,8 @@ export function getThinkingLevel(ctx: ExtensionContext): string {
 
 export function buildEditorMeta(
   ctx: ExtensionContext,
-  theme: Theme,
-  usageState: UsageState,
+  _theme: Theme,
+  _usageState: UsageState,
   thinkingLevel = getThinkingLevel(ctx),
 ): EditorMeta {
   const modelLabel = ctx.model?.name ?? ctx.model?.id ?? "no-model";
@@ -47,8 +58,6 @@ export function buildEditorMeta(
   return {
     modelLabel,
     thinkingLevel,
-    quotaLabels: usageWindows(usageState.current()).map((window) =>
-      renderQuotaWindow(theme, window),
-    ),
+    contextMeter: buildContextMeter(ctx),
   };
 }
