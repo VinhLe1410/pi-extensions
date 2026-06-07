@@ -22,17 +22,11 @@ function renderFrame(
 }
 
 function kernelStarts(trackWidth: number, kernelLength: number): number[] {
-  const forward: number[] = [];
-  for (let start = -kernelLength; start <= trackWidth; start++) {
-    forward.push(start);
+  const starts: number[] = [];
+  for (let start = 1 - kernelLength; start <= trackWidth; start++) {
+    starts.push(start);
   }
-
-  const backward: number[] = [];
-  for (let start = trackWidth - 1; start > -kernelLength; start--) {
-    backward.push(start);
-  }
-
-  return [...forward, ...backward];
+  return starts;
 }
 
 export function createLoadingBarFrames(config: LoadingBarConfig): string[] {
