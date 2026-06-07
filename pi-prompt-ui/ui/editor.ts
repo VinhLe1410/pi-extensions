@@ -130,7 +130,7 @@ export class PolishedInputEditor extends CustomEditor {
 
   private renderMetadata(meta: EditorMeta, width: number): string {
     const left = this.renderIdentityBadge(meta);
-    const right = meta.branch ? this.renderBranchBadge(meta.branch) : "";
+    const right = meta.contextMeter ? this.renderContextMeter(meta.contextMeter) : "";
 
     if (!right) return truncateToWidth(left, width, "");
 
@@ -148,9 +148,9 @@ export class PolishedInputEditor extends CustomEditor {
       this.labelTheme.bold(this.labelTheme.fg("text", ` ${meta.modelLabel} `)),
     );
     const effort = this.renderEffortBadge(meta.thinkingLevel);
-    const context = meta.contextMeter ? `  ${this.renderContextMeter(meta.contextMeter)}` : "";
+    const branch = meta.branch ? `  ${this.renderBranchBadge(meta.branch)}` : "";
 
-    return `${model}${effort}${context}`;
+    return `${model}${effort}${branch}`;
   }
 
   private renderEffortBadge(thinkingLevel: string): string {
@@ -179,29 +179,20 @@ export class PolishedInputEditor extends CustomEditor {
   }
 
   private renderContextMeter(meter: EditorContextMeter): string {
-    const label = truncateToWidth(meter.label, CONTEXT_METER_WIDTH - 2, "");
-    const labelChars = Array.from(label);
-    const labelWidth = visibleWidth(label);
-    const labelStart = Math.max(0, Math.floor((CONTEXT_METER_WIDTH - labelWidth) / 2));
     const clampedPercent = Math.max(0, Math.min(100, meter.percent));
     const filledCells = Math.round((CONTEXT_METER_WIDTH * clampedPercent) / 100);
     const color = contextColor(meter.percent);
-
-    return Array.from({ length: CONTEXT_METER_WIDTH }, (_, index) => {
-      const labelIndex = index - labelStart;
-      const labelChar =
-        labelIndex >= 0 && labelIndex < labelChars.length ? labelChars[labelIndex] : undefined;
-      const char = labelChar ?? " ";
+    const bar = Array.from({ length: CONTEXT_METER_WIDTH }, (_, index) => {
       const isFilled = index < filledCells;
-
-      if (isFilled) {
-        return this.labelTheme.inverse(this.labelTheme.bold(this.labelTheme.fg(color, char)));
-      }
-
-      return this.labelTheme.bg(
-        "toolPendingBg",
-        labelChar ? this.labelTheme.fg("text", char) : char,
-      );
+      return this.labelTheme.fg(isFilled ? color : "borderMuted", isFilled ? "━" : "─");
     }).join("");
+
+    return [
+      this.labelTheme.fg("muted", "CTX"),
+      this.labelTheme.fg("borderMuted", " "),
+      bar,
+      this.labelTheme.fg("borderMuted", " "),
+      this.labelTheme.bold(this.labelTheme.fg("text", meter.label)),
+    ].join("");
   }
 }
