@@ -186,6 +186,8 @@ export default function (pi: ExtensionAPI) {
           const thinkingLevel = getThinkingLevel(ctx);
           return {
             meta: buildEditorMeta(ctx, git.current(), thinkingLevel),
+            loadingFrameIndex: loadingActive && loadingFrames.length > 0 ? loadingFrameIndex : undefined,
+            loadingFrameCount: loadingFrames.length,
           };
         },
         ctx.ui.theme,

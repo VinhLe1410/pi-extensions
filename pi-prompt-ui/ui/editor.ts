@@ -1,5 +1,5 @@
 import { CustomEditor } from "@earendil-works/pi-coding-agent";
-import type { KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
+import type { KeybindingsManager, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
   type EditorTheme,
@@ -12,6 +12,10 @@ import { contextColor, thinkingColor } from "./theme";
 const RAIL_GAP = " ";
 const RIGHT_RAIL_GAP = " ";
 const CONTEXT_METER_WIDTH = 18;
+const CHASE_TRAIL_LENGTH = 80;
+const CHASE_HEAVY_LENGTH = 40;
+const CHASE_HEAD_LENGTH = 15;
+const RESET_FG = "\x1b[39m";
 
 export interface EditorContextMeter {
   percent: number;
@@ -34,6 +38,19 @@ export interface EditorMeta {
 
 export interface EditorChrome {
   meta: EditorMeta;
+  loadingFrameIndex?: number;
+  loadingFrameCount?: number;
+}
+
+interface BorderChase {
+  head: number;
+  perimeter: number;
+}
+
+interface Rgb {
+  r: number;
+  g: number;
+  b: number;
 }
 
 type AutocompleteEditorInternals = {
@@ -50,9 +67,73 @@ function clampRenderedLines(lines: string[], width: number): string[] {
   return lines.map((line) => truncateToWidth(line, maxWidth, ""));
 }
 
+function ansi256ToRgb(index: number): Rgb | undefined {
+  if (index < 0 || index > 255) return undefined;
+
+  const basic: Rgb[] = [
+    { r: 0, g: 0, b: 0 },
+    { r: 128, g: 0, b: 0 },
+    { r: 0, g: 128, b: 0 },
+    { r: 128, g: 128, b: 0 },
+    { r: 0, g: 0, b: 128 },
+    { r: 128, g: 0, b: 128 },
+    { r: 0, g: 128, b: 128 },
+    { r: 192, g: 192, b: 192 },
+    { r: 128, g: 128, b: 128 },
+    { r: 255, g: 0, b: 0 },
+    { r: 0, g: 255, b: 0 },
+    { r: 255, g: 255, b: 0 },
+    { r: 0, g: 0, b: 255 },
+    { r: 255, g: 0, b: 255 },
+    { r: 0, g: 255, b: 255 },
+    { r: 255, g: 255, b: 255 },
+  ];
+  if (index < 16) return basic[index];
+
+  if (index < 232) {
+    const cubeIndex = index - 16;
+    const r = Math.floor(cubeIndex / 36);
+    const g = Math.floor((cubeIndex % 36) / 6);
+    const b = cubeIndex % 6;
+    const channel = (value: number) => (value === 0 ? 0 : 55 + value * 40);
+    return { r: channel(r), g: channel(g), b: channel(b) };
+  }
+
+  const gray = 8 + (index - 232) * 10;
+  return { r: gray, g: gray, b: gray };
+}
+
+function parseAnsiRgb(ansi: string): Rgb | undefined {
+  const trueColor = ansi.match(/\x1b\[38;2;(\d+);(\d+);(\d+)m/);
+  if (trueColor) {
+    return {
+      r: Number(trueColor[1]),
+      g: Number(trueColor[2]),
+      b: Number(trueColor[3]),
+    };
+  }
+
+  const indexed = ansi.match(/\x1b\[38;5;(\d+)m/);
+  return indexed ? ansi256ToRgb(Number(indexed[1])) : undefined;
+}
+
+function blendRgb(from: Rgb, to: Rgb, amount: number): Rgb {
+  const clamped = Math.max(0, Math.min(1, amount));
+  return {
+    r: Math.round(from.r + (to.r - from.r) * clamped),
+    g: Math.round(from.g + (to.g - from.g) * clamped),
+    b: Math.round(from.b + (to.b - from.b) * clamped),
+  };
+}
+
+function rgbFg(rgb: Rgb, text: string): string {
+  return `\x1b[38;2;${rgb.r};${rgb.g};${rgb.b}m${text}${RESET_FG}`;
+}
+
 export class PolishedInputEditor extends CustomEditor {
   private getChrome: () => EditorChrome;
   private labelTheme: Theme;
+  private colorCache = new Map<ThemeColor, Rgb | undefined>();
 
   constructor(
     tui: TUI,
@@ -70,7 +151,8 @@ export class PolishedInputEditor extends CustomEditor {
   render(width: number): string[] {
     if (width <= 2) return clampRenderedLines(super.render(width), width);
 
-    const { meta } = this.getChrome();
+    const chrome = this.getChrome();
+    const { meta } = chrome;
     const rail = this.renderRail();
     const rightRail = this.renderRightRail();
     const railWidth = visibleWidth(rail);
@@ -105,13 +187,17 @@ export class PolishedInputEditor extends CustomEditor {
     const editorLines = editorFrame.slice(1, -1);
     const metadata = this.renderMetadata(meta, innerWidth);
     const lines = ["", ...editorLines, "", metadata];
-    const top = this.renderTopBorder(width);
-    const bottom = this.renderBottomBorder(width);
+    const chase = this.createBorderChase(width, lines.length, chrome);
+    const top = this.renderTopBorder(width, chase);
+    const bottom = this.renderBottomBorder(width, lines.length, chase);
 
     return clampRenderedLines(
       [
         top,
-        ...lines.map((line) => `${rail}${this.fillLine(line, innerWidth)}${rightRail}`),
+        ...lines.map(
+          (line, index) =>
+            `${this.renderRail(index, lines.length, width, chase)}${this.fillLine(line, innerWidth)}${this.renderRightRail(index, lines.length, width, chase)}`,
+        ),
         bottom,
         ...autocompleteLines,
       ],
@@ -119,22 +205,129 @@ export class PolishedInputEditor extends CustomEditor {
     );
   }
 
-  private renderRail(): string {
-    return this.borderColor("│") + RAIL_GAP;
+  private renderRail(
+    rowIndex?: number,
+    rowCount?: number,
+    width?: number,
+    chase?: BorderChase,
+  ): string {
+    if (rowIndex === undefined || rowCount === undefined || width === undefined) {
+      return this.borderColor("│") + RAIL_GAP;
+    }
+
+    const pathIndex = width * 2 + rowCount + (rowCount - 1 - rowIndex);
+    return this.renderBorderCell("│", pathIndex, chase, "border") + RAIL_GAP;
   }
 
-  private renderRightRail(): string {
-    return RIGHT_RAIL_GAP + this.borderColor("│");
+  private renderRightRail(
+    rowIndex?: number,
+    _rowCount?: number,
+    width?: number,
+    chase?: BorderChase,
+  ): string {
+    if (rowIndex === undefined || width === undefined) {
+      return RIGHT_RAIL_GAP + this.borderColor("│");
+    }
+
+    const pathIndex = width + rowIndex;
+    return RIGHT_RAIL_GAP + this.renderBorderCell("│", pathIndex, chase, "border");
   }
 
-  private renderTopBorder(width: number): string {
-    if (width <= 1) return this.labelTheme.fg("borderMuted", "─".repeat(Math.max(0, width)));
-    return this.labelTheme.fg("borderMuted", `┌${"─".repeat(Math.max(0, width - 2))}┐`);
+  private renderTopBorder(width: number, chase?: BorderChase): string {
+    return Array.from({ length: Math.max(0, width) }, (_, index) => {
+      const char = width <= 1 ? "─" : index === 0 ? "┌" : index === width - 1 ? "┐" : "─";
+      return this.renderBorderCell(char, index, chase, "borderMuted");
+    }).join("");
   }
 
-  private renderBottomBorder(width: number): string {
-    if (width <= 1) return this.labelTheme.fg("borderMuted", "─".repeat(Math.max(0, width)));
-    return this.labelTheme.fg("borderMuted", `└${"─".repeat(Math.max(0, width - 2))}┘`);
+  private renderBottomBorder(width: number, rowCount: number, chase?: BorderChase): string {
+    return Array.from({ length: Math.max(0, width) }, (_, index) => {
+      const char = width <= 1 ? "─" : index === 0 ? "└" : index === width - 1 ? "┘" : "─";
+      const pathIndex = width + rowCount + (width - 1 - index);
+      return this.renderBorderCell(char, pathIndex, chase, "borderMuted");
+    }).join("");
+  }
+
+  private createBorderChase(
+    width: number,
+    rowCount: number,
+    chrome: EditorChrome,
+  ): BorderChase | undefined {
+    if (chrome.loadingFrameIndex === undefined || !chrome.loadingFrameCount) return undefined;
+
+    const perimeter = Math.max(1, width * 2 + rowCount * 2);
+    const progress = (chrome.loadingFrameIndex % chrome.loadingFrameCount) / chrome.loadingFrameCount;
+    return {
+      head: Math.floor(progress * perimeter),
+      perimeter,
+    };
+  }
+
+  private renderBorderCell(
+    char: string,
+    pathIndex: number,
+    chase: BorderChase | undefined,
+    baseColor: "border" | "borderMuted",
+  ): string {
+    const distance = chase ? this.chaseDistance(pathIndex, chase) : undefined;
+    if (distance !== undefined && distance <= CHASE_TRAIL_LENGTH) {
+      return this.renderChaseCell(char, distance, baseColor);
+    }
+
+    return baseColor === "border" ? this.borderColor(char) : this.labelTheme.fg("borderMuted", char);
+  }
+
+  private renderChaseCell(
+    char: string,
+    distance: number,
+    baseColor: "border" | "borderMuted",
+  ): string {
+    const accent = this.themeRgb("borderAccent");
+    const base = this.themeRgb(baseColor);
+    const isHead = distance <= CHASE_HEAD_LENGTH;
+    const glyph = distance <= CHASE_HEAVY_LENGTH ? this.heavyBorderChar(char) : char;
+    const intensity = isHead ? 1 : 1 - distance / (CHASE_TRAIL_LENGTH + 1);
+    const easedIntensity = intensity * intensity;
+
+    if (!accent || !base) {
+      if (isHead) return this.labelTheme.bold(this.labelTheme.fg("borderAccent", glyph));
+      if (distance <= CHASE_HEAVY_LENGTH) return this.labelTheme.fg("borderAccent", glyph);
+      return baseColor === "border" ? this.borderColor(char) : this.labelTheme.fg("borderMuted", char);
+    }
+
+    const color = blendRgb(base, accent, easedIntensity);
+    const rendered = rgbFg(color, glyph);
+    return isHead ? this.labelTheme.bold(rendered) : rendered;
+  }
+
+  private themeRgb(color: ThemeColor): Rgb | undefined {
+    if (!this.colorCache.has(color)) {
+      this.colorCache.set(color, parseAnsiRgb(this.labelTheme.getFgAnsi(color)));
+    }
+    return this.colorCache.get(color);
+  }
+
+  private heavyBorderChar(char: string): string {
+    switch (char) {
+      case "─":
+        return "━";
+      case "│":
+        return "┃";
+      case "┌":
+        return "┏";
+      case "┐":
+        return "┓";
+      case "└":
+        return "┗";
+      case "┘":
+        return "┛";
+      default:
+        return char;
+    }
+  }
+
+  private chaseDistance(pathIndex: number, chase: BorderChase): number {
+    return (chase.head - pathIndex + chase.perimeter) % chase.perimeter;
   }
 
   private fillLine(content: string, width: number): string {
