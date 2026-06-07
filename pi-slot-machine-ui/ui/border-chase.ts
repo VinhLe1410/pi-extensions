@@ -69,12 +69,14 @@ export function rgbFg(rgb: Rgb, text: string): string {
   return `\x1b[38;2;${rgb.r};${rgb.g};${rgb.b}m${text}${RESET_FG}`;
 }
 
+export function rgbBg(rgb: Rgb, text: string): string {
+  return `\x1b[48;2;${rgb.r};${rgb.g};${rgb.b}m${text}\x1b[49m`;
+}
+
 export function heavyBorderChar(char: string): string {
   switch (char) {
     case "─":
       return "━";
-    case "│":
-      return "┃";
     case "┌":
       return "┏";
     case "┐":
