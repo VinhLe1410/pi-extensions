@@ -4,7 +4,6 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import type { PromptUiConfig } from "../core/config";
 import type { RateWindow, UsageSnapshot } from "../core/types";
 import { collectExtensionStatusSegments } from "./extension-status";
 import { percentColor, RESET_ICON } from "./theme";
@@ -87,12 +86,6 @@ function fitStatusTexts(statusTexts: string[], maxWidth: number, separator: stri
   return joinStatusTexts(fitted, separator);
 }
 
-function appendStatusArea(base: string, statusText: string, separator: string): string {
-  if (!base) return statusText;
-  if (!statusText) return base;
-  return `${base}${separator}${statusText}`;
-}
-
 function prependStatusArea(base: string, statusText: string, separator: string): string {
   if (!base) return statusText;
   if (!statusText) return base;
@@ -110,81 +103,35 @@ function composeBuiltInFooterContent(left: string, right: string, width: number)
 }
 
 function composeFooter(
-  builtInLeft: string,
-  builtInRight: string,
-  extensionLeft: string[],
-  extensionMiddle: string[],
+  left: string,
+  right: string,
   extensionRight: string[],
   separator: string,
   width: number,
 ): string {
-  const builtInLeftWidth = visibleWidth(builtInLeft);
-  const builtInRightWidth = visibleWidth(builtInRight);
-  const minimumGap = builtInLeft && builtInRight ? 1 : 0;
+  const leftWidth = visibleWidth(left);
+  const rightWidth = visibleWidth(right);
+  const minimumGap = left && right ? 1 : 0;
 
-  if (builtInLeftWidth + minimumGap + builtInRightWidth > width) {
-    return composeBuiltInFooterContent(builtInLeft, builtInRight, width);
+  if (leftWidth + minimumGap + rightWidth > width) {
+    return composeBuiltInFooterContent(left, right, width);
   }
 
-  const available = Math.max(0, width - builtInLeftWidth - builtInRightWidth - minimumGap);
-  let remaining = available;
-  const leftConnectorWidth = builtInLeft && extensionLeft.length > 0 ? visibleWidth(separator) : 0;
-  const rightConnectorWidth =
-    builtInRight && extensionRight.length > 0 ? visibleWidth(separator) : 0;
-  let leftStatus = "";
-  let rightStatus = "";
-
-  if (extensionLeft.length > 0 && extensionRight.length > 0) {
-    const leftBudget = Math.max(0, Math.floor(available / 2) - leftConnectorWidth);
-    leftStatus = fitStatusTexts(extensionLeft, leftBudget, separator);
-    remaining -= leftStatus ? leftConnectorWidth + visibleWidth(leftStatus) : 0;
-
-    const rightBudget = Math.max(0, remaining - rightConnectorWidth);
-    rightStatus = fitStatusTexts(extensionRight, rightBudget, separator);
-    remaining -= rightStatus ? rightConnectorWidth + visibleWidth(rightStatus) : 0;
-
-    const expandedLeftBudget = Math.max(0, remaining + visibleWidth(leftStatus));
-    const expandedLeftStatus = fitStatusTexts(extensionLeft, expandedLeftBudget, separator);
-    if (visibleWidth(expandedLeftStatus) > visibleWidth(leftStatus)) {
-      remaining += leftStatus ? leftConnectorWidth + visibleWidth(leftStatus) : 0;
-      leftStatus = expandedLeftStatus;
-      remaining -= leftStatus ? leftConnectorWidth + visibleWidth(leftStatus) : 0;
-    }
-  } else if (extensionLeft.length > 0) {
-    leftStatus = fitStatusTexts(
-      extensionLeft,
-      Math.max(0, available - leftConnectorWidth),
-      separator,
-    );
-    remaining -= leftStatus ? leftConnectorWidth + visibleWidth(leftStatus) : 0;
-  } else if (extensionRight.length > 0) {
-    rightStatus = fitStatusTexts(
-      extensionRight,
-      Math.max(0, available - rightConnectorWidth),
-      separator,
-    );
-    remaining -= rightStatus ? rightConnectorWidth + visibleWidth(rightStatus) : 0;
-  }
-
-  const left = appendStatusArea(builtInLeft, leftStatus, separator);
-  const right = prependStatusArea(builtInRight, rightStatus, separator);
-  const gapWidth = Math.max(0, width - visibleWidth(left) - visibleWidth(right));
-  const middle = fitStatusTexts(extensionMiddle, gapWidth, separator);
-  const middleWidth = visibleWidth(middle);
-
-  if (!middle || middleWidth <= 0) {
-    return `${left}${" ".repeat(gapWidth)}${right}`;
-  }
-
-  const leftPadding = Math.floor((gapWidth - middleWidth) / 2);
-  const rightPadding = gapWidth - middleWidth - leftPadding;
-  return `${left}${" ".repeat(leftPadding)}${middle}${" ".repeat(rightPadding)}${right}`;
+  const available = Math.max(0, width - leftWidth - rightWidth - minimumGap);
+  const connectorWidth = right && extensionRight.length > 0 ? visibleWidth(separator) : 0;
+  const rightStatus = fitStatusTexts(
+    extensionRight,
+    Math.max(0, available - connectorWidth),
+    separator,
+  );
+  const finalRight = prependStatusArea(right, rightStatus, separator);
+  const gapWidth = Math.max(0, width - visibleWidth(left) - visibleWidth(finalRight));
+  return `${left}${" ".repeat(gapWidth)}${finalRight}`;
 }
 
 export function renderStatusFooter(
   ctx: ExtensionContext,
   footerData: ReadonlyFooterDataProvider,
-  config: PromptUiConfig,
   usageSnapshot: UsageSnapshot | null,
   width: number,
   theme: Theme,
@@ -194,20 +141,14 @@ export function renderStatusFooter(
   const separator = theme.fg("dim", FOOTER_SEPARATOR);
   const left = renderCwd(ctx, theme);
   const right = renderQuotaBadges(usageSnapshot, theme);
-  const extensionStatuses = collectExtensionStatusSegments(
-    footerData.getExtensionStatuses(),
-    config,
-  );
+  const extensionStatuses = collectExtensionStatusSegments(footerData.getExtensionStatuses());
   const renderExtensionStatus = (text: string) => renderStatusChip(text, theme);
-  const innerWidth = width;
   const content = composeFooter(
     left,
     right,
-    extensionStatuses.left.map((segment) => renderExtensionStatus(segment.text)),
-    extensionStatuses.middle.map((segment) => renderExtensionStatus(segment.text)),
-    extensionStatuses.right.map((segment) => renderExtensionStatus(segment.text)),
+    extensionStatuses.map((segment) => renderExtensionStatus(segment.text)),
     separator,
-    innerWidth,
+    width,
   );
   return [truncateToWidth(content, width, "")];
 }

@@ -6,26 +6,25 @@ import type {
 import type { KeybindingsManager } from "@earendil-works/pi-coding-agent";
 import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import {
+  PROJECT_REFRESH_INTERVAL_MS,
   PROVIDER_MAP,
   USAGE_REFRESH_INTERVAL,
-  loadConfig,
-  saveExtensionStatusPlacement,
-  type ExtensionStatusPlacement,
-  type PromptUiConfig,
-} from "./core/config";
+} from "./core/constants";
 import { createFetcherRegistry } from "./fetchers";
 import { createAuthResolver } from "./seams/auth";
 import { createGitState } from "./seams/git";
 import { createUsageState } from "./seams/usage-state";
 import { PolishedInputEditor } from "./ui/editor";
 import { buildEditorMeta, getThinkingLevel } from "./ui/editor-meta";
-import { registerSlotMachineUiSettingsCommand } from "./ui/settings-command";
 import { renderStatusFooter } from "./ui/status-footer";
 import { pickWorkingMessage } from "./whimsical/messages";
 
 const BORDER_CHASE_INTERVAL_MS = 50;
 const BORDER_CHASE_CYCLE_MS = 850;
-const BORDER_CHASE_FRAME_COUNT = Math.max(1, Math.round(BORDER_CHASE_CYCLE_MS / BORDER_CHASE_INTERVAL_MS));
+const BORDER_CHASE_FRAME_COUNT = Math.max(
+  1,
+  Math.round(BORDER_CHASE_CYCLE_MS / BORDER_CHASE_INTERVAL_MS),
+);
 
 function detectProvider(modelProvider: string | undefined): string | null {
   return modelProvider ? PROVIDER_MAP[modelProvider] || null : null;
@@ -39,14 +38,12 @@ export default function (pi: ExtensionAPI) {
     intervalMs: USAGE_REFRESH_INTERVAL,
   });
 
-  let currentConfig: PromptUiConfig = loadConfig();
   let activeTui: TUI | undefined;
   let activeCwd: string | undefined;
   let projectRefreshTimer: ReturnType<typeof setInterval> | undefined;
   let projectRefreshInFlight = false;
   let projectRefreshPending = false;
   let requestFooterRender: (() => void) | undefined;
-  let getActiveExtensionStatuses: () => ReadonlyMap<string, string> = () => new Map();
   let cleanupUsageListener: (() => void) | undefined;
   let hasPromptUi = false;
   let borderChaseTimer: ReturnType<typeof setInterval> | undefined;
@@ -113,10 +110,9 @@ export default function (pi: ExtensionAPI) {
     activeCwd = cwd;
     if (projectRefreshTimer) clearInterval(projectRefreshTimer);
     scheduleProjectRefresh(cwd);
-    if (currentConfig.projectRefreshIntervalMs <= 0) return;
     projectRefreshTimer = setInterval(
       () => scheduleProjectRefresh(cwd),
-      currentConfig.projectRefreshIntervalMs,
+      PROJECT_REFRESH_INTERVAL_MS,
     );
     projectRefreshTimer.unref?.();
   }
@@ -139,18 +135,6 @@ export default function (pi: ExtensionAPI) {
       usage.stop();
     }
   }
-
-  registerSlotMachineUiSettingsCommand(pi, {
-    getConfig: () => currentConfig,
-    getActiveExtensionStatuses: () => getActiveExtensionStatuses(),
-    setExtensionStatusPlacement(key: string, placement: ExtensionStatusPlacement) {
-      currentConfig = saveExtensionStatusPlacement(key, placement);
-    },
-    requestRender() {
-      requestFooterRender?.();
-      activeTui?.requestRender();
-    },
-  });
 
   pi.on("session_start", (_event, ctx) => {
     if (!ctx.hasUI) {
@@ -190,19 +174,16 @@ export default function (pi: ExtensionAPI) {
 
     ctx.ui.setFooter((tui: TUI, theme: Theme, footerData: ReadonlyFooterDataProvider) => {
       requestFooterRender = () => tui.requestRender();
-      getActiveExtensionStatuses = () => footerData.getExtensionStatuses();
 
       return {
         dispose() {
           requestFooterRender = undefined;
-          getActiveExtensionStatuses = () => new Map();
         },
         invalidate() {},
         render(width: number): string[] {
           return renderStatusFooter(
             ctx,
             footerData,
-            currentConfig,
             usage.current(),
             width,
             theme,
@@ -218,7 +199,6 @@ export default function (pi: ExtensionAPI) {
     cleanupUsageListener?.();
     cleanupUsageListener = undefined;
     requestFooterRender = undefined;
-    getActiveExtensionStatuses = () => new Map();
     activeTui = undefined;
     hasPromptUi = false;
     workingMessage = undefined;

@@ -1,17 +1,8 @@
 import { stripVTControlCharacters } from "node:util";
-import type { ExtensionStatusPlacement, PromptUiConfig } from "../core/config";
-import { getExtensionStatusPlacement } from "../core/config";
 
 export type ExtensionStatusSegment = {
   key: string;
   text: string;
-  placement: ExtensionStatusPlacement;
-};
-
-export type ExtensionStatusSegmentsByPlacement = {
-  left: ExtensionStatusSegment[];
-  middle: ExtensionStatusSegment[];
-  right: ExtensionStatusSegment[];
 };
 
 function compareKeys(a: ExtensionStatusSegment, b: ExtensionStatusSegment): number {
@@ -28,26 +19,13 @@ export function sanitizeExtensionStatusText(value: string): string {
 
 export function collectExtensionStatusSegments(
   statuses: ReadonlyMap<string, string>,
-  config: PromptUiConfig,
-): ExtensionStatusSegmentsByPlacement {
-  const segments: ExtensionStatusSegmentsByPlacement = {
-    left: [],
-    middle: [],
-    right: [],
-  };
+): ExtensionStatusSegment[] {
+  const segments: ExtensionStatusSegment[] = [];
 
   for (const [key, value] of statuses.entries()) {
-    const placement = getExtensionStatusPlacement(config, key);
-    if (placement === "off") continue;
-
     const text = sanitizeExtensionStatusText(value);
-    if (!text) continue;
-
-    segments[placement].push({ key, text, placement });
+    if (text) segments.push({ key, text });
   }
 
-  segments.left.sort(compareKeys);
-  segments.middle.sort(compareKeys);
-  segments.right.sort(compareKeys);
-  return segments;
+  return segments.sort(compareKeys);
 }
