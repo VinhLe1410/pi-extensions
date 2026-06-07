@@ -7,6 +7,13 @@ import {
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
+import {
+  blendRgb,
+  heavyBorderChar,
+  parseAnsiRgb,
+  rgbFg,
+  type Rgb,
+} from "./border-chase";
 import { contextColor, thinkingColor } from "./theme";
 
 const RAIL_GAP = " ";
@@ -15,7 +22,6 @@ const CONTEXT_METER_WIDTH = 18;
 const CHASE_TRAIL_LENGTH = 80;
 const CHASE_HEAVY_LENGTH = 40;
 const CHASE_HEAD_LENGTH = 15;
-const RESET_FG = "\x1b[39m";
 
 export interface EditorContextMeter {
   percent: number;
@@ -38,8 +44,8 @@ export interface EditorMeta {
 
 export interface EditorChrome {
   meta: EditorMeta;
-  loadingFrameIndex?: number;
-  loadingFrameCount?: number;
+  chaseFrameIndex?: number;
+  chaseFrameCount?: number;
   workingMessage?: string;
 }
 
@@ -48,16 +54,15 @@ interface BorderChase {
   perimeter: number;
 }
 
-interface Rgb {
-  r: number;
-  g: number;
-  b: number;
-}
-
 type AutocompleteEditorInternals = {
   autocompleteList?: Pick<Component, "render">;
   isShowingAutocomplete?: () => boolean;
 };
+
+interface EditorFrameParts {
+  editorFrame: string[];
+  autocompleteLines: string[];
+}
 
 function padRight(text: string, width: number): string {
   return text + " ".repeat(Math.max(0, width - visibleWidth(text)));
@@ -66,69 +71,6 @@ function padRight(text: string, width: number): string {
 function clampRenderedLines(lines: string[], width: number): string[] {
   const maxWidth = Math.max(0, width);
   return lines.map((line) => truncateToWidth(line, maxWidth, ""));
-}
-
-function ansi256ToRgb(index: number): Rgb | undefined {
-  if (index < 0 || index > 255) return undefined;
-
-  const basic: Rgb[] = [
-    { r: 0, g: 0, b: 0 },
-    { r: 128, g: 0, b: 0 },
-    { r: 0, g: 128, b: 0 },
-    { r: 128, g: 128, b: 0 },
-    { r: 0, g: 0, b: 128 },
-    { r: 128, g: 0, b: 128 },
-    { r: 0, g: 128, b: 128 },
-    { r: 192, g: 192, b: 192 },
-    { r: 128, g: 128, b: 128 },
-    { r: 255, g: 0, b: 0 },
-    { r: 0, g: 255, b: 0 },
-    { r: 255, g: 255, b: 0 },
-    { r: 0, g: 0, b: 255 },
-    { r: 255, g: 0, b: 255 },
-    { r: 0, g: 255, b: 255 },
-    { r: 255, g: 255, b: 255 },
-  ];
-  if (index < 16) return basic[index];
-
-  if (index < 232) {
-    const cubeIndex = index - 16;
-    const r = Math.floor(cubeIndex / 36);
-    const g = Math.floor((cubeIndex % 36) / 6);
-    const b = cubeIndex % 6;
-    const channel = (value: number) => (value === 0 ? 0 : 55 + value * 40);
-    return { r: channel(r), g: channel(g), b: channel(b) };
-  }
-
-  const gray = 8 + (index - 232) * 10;
-  return { r: gray, g: gray, b: gray };
-}
-
-function parseAnsiRgb(ansi: string): Rgb | undefined {
-  const trueColor = ansi.match(/\x1b\[38;2;(\d+);(\d+);(\d+)m/);
-  if (trueColor) {
-    return {
-      r: Number(trueColor[1]),
-      g: Number(trueColor[2]),
-      b: Number(trueColor[3]),
-    };
-  }
-
-  const indexed = ansi.match(/\x1b\[38;5;(\d+)m/);
-  return indexed ? ansi256ToRgb(Number(indexed[1])) : undefined;
-}
-
-function blendRgb(from: Rgb, to: Rgb, amount: number): Rgb {
-  const clamped = Math.max(0, Math.min(1, amount));
-  return {
-    r: Math.round(from.r + (to.r - from.r) * clamped),
-    g: Math.round(from.g + (to.g - from.g) * clamped),
-    b: Math.round(from.b + (to.b - from.b) * clamped),
-  };
-}
-
-function rgbFg(rgb: Rgb, text: string): string {
-  return `\x1b[38;2;${rgb.r};${rgb.g};${rgb.b}m${text}${RESET_FG}`;
 }
 
 export class PolishedInputEditor extends CustomEditor {
@@ -160,29 +102,12 @@ export class PolishedInputEditor extends CustomEditor {
     const rightRailWidth = visibleWidth(rightRail);
     const innerWidth = Math.max(1, width - railWidth - rightRailWidth);
     const rendered = super.render(innerWidth);
-    const editorInternals = this as unknown as AutocompleteEditorInternals;
-    const isShowingAutocomplete =
-      typeof editorInternals.isShowingAutocomplete === "function" &&
-      editorInternals.isShowingAutocomplete();
 
     if (rendered.length < 2) {
       return clampRenderedLines(super.render(width), width);
     }
 
-    const { autocompleteList } = editorInternals;
-    const autocompleteCount =
-      isShowingAutocomplete && typeof autocompleteList?.render === "function"
-        ? autocompleteList.render(innerWidth).length
-        : 0;
-    const editorFrame =
-      autocompleteCount > 0 && autocompleteCount < rendered.length
-        ? rendered.slice(0, -autocompleteCount)
-        : rendered;
-    const autocompleteLines =
-      autocompleteCount > 0 && autocompleteCount < rendered.length
-        ? rendered.slice(-autocompleteCount)
-        : [];
-
+    const { editorFrame, autocompleteLines } = this.splitRenderedEditor(rendered, innerWidth);
     if (editorFrame.length < 2) return clampRenderedLines(rendered, width);
 
     const editorLines = editorFrame.slice(1, -1);
@@ -204,6 +129,26 @@ export class PolishedInputEditor extends CustomEditor {
       ],
       width,
     );
+  }
+
+  private splitRenderedEditor(rendered: string[], innerWidth: number): EditorFrameParts {
+    const editorInternals = this as unknown as AutocompleteEditorInternals;
+    const isShowingAutocomplete =
+      typeof editorInternals.isShowingAutocomplete === "function" &&
+      editorInternals.isShowingAutocomplete();
+    const autocompleteCount =
+      isShowingAutocomplete && typeof editorInternals.autocompleteList?.render === "function"
+        ? editorInternals.autocompleteList.render(innerWidth).length
+        : 0;
+
+    if (autocompleteCount <= 0 || autocompleteCount >= rendered.length) {
+      return { editorFrame: rendered, autocompleteLines: [] };
+    }
+
+    return {
+      editorFrame: rendered.slice(0, -autocompleteCount),
+      autocompleteLines: rendered.slice(-autocompleteCount),
+    };
   }
 
   private renderRail(
@@ -270,10 +215,10 @@ export class PolishedInputEditor extends CustomEditor {
     rowCount: number,
     chrome: EditorChrome,
   ): BorderChase | undefined {
-    if (chrome.loadingFrameIndex === undefined || !chrome.loadingFrameCount) return undefined;
+    if (chrome.chaseFrameIndex === undefined || !chrome.chaseFrameCount) return undefined;
 
     const perimeter = Math.max(1, width * 2 + rowCount * 2);
-    const progress = (chrome.loadingFrameIndex % chrome.loadingFrameCount) / chrome.loadingFrameCount;
+    const progress = (chrome.chaseFrameIndex % chrome.chaseFrameCount) / chrome.chaseFrameCount;
     return {
       head: Math.floor(progress * perimeter),
       perimeter,
@@ -302,7 +247,7 @@ export class PolishedInputEditor extends CustomEditor {
     const accent = this.themeRgb("borderAccent");
     const base = this.themeRgb(baseColor);
     const isHead = distance <= CHASE_HEAD_LENGTH;
-    const glyph = distance <= CHASE_HEAVY_LENGTH ? this.heavyBorderChar(char) : char;
+    const glyph = distance <= CHASE_HEAVY_LENGTH ? heavyBorderChar(char) : char;
     const intensity = isHead ? 1 : 1 - distance / (CHASE_TRAIL_LENGTH + 1);
     const easedIntensity = intensity * intensity;
 
@@ -322,25 +267,6 @@ export class PolishedInputEditor extends CustomEditor {
       this.colorCache.set(color, parseAnsiRgb(this.labelTheme.getFgAnsi(color)));
     }
     return this.colorCache.get(color);
-  }
-
-  private heavyBorderChar(char: string): string {
-    switch (char) {
-      case "─":
-        return "━";
-      case "│":
-        return "┃";
-      case "┌":
-        return "┏";
-      case "┐":
-        return "┓";
-      case "└":
-        return "┗";
-      case "┘":
-        return "┛";
-      default:
-        return char;
-    }
   }
 
   private chaseDistance(pathIndex: number, chase: BorderChase): number {

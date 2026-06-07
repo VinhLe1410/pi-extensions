@@ -19,11 +19,13 @@ import { createGitState } from "./seams/git";
 import { createUsageState } from "./seams/usage-state";
 import { PolishedInputEditor } from "./ui/editor";
 import { buildEditorMeta, getThinkingLevel } from "./ui/editor-meta";
-import { createLoadingBarFrames } from "./ui/loading-bar";
 import { registerPromptUiSettingsCommand } from "./ui/settings-command";
 import { renderStatusFooter } from "./ui/status-footer";
 
 const WHIMSICAL_WORKING_MESSAGE_EVENT = "pi-whimsical:working-message";
+const BORDER_CHASE_INTERVAL_MS = 50;
+const BORDER_CHASE_CYCLE_MS = 850;
+const BORDER_CHASE_FRAME_COUNT = Math.max(1, Math.round(BORDER_CHASE_CYCLE_MS / BORDER_CHASE_INTERVAL_MS));
 
 function detectProvider(modelProvider: string | undefined): string | null {
   return modelProvider ? PROVIDER_MAP[modelProvider] || null : null;
@@ -47,10 +49,9 @@ export default function (pi: ExtensionAPI) {
   let getActiveExtensionStatuses: () => ReadonlyMap<string, string> = () => new Map();
   let cleanupUsageListener: (() => void) | undefined;
   let hasPromptUi = false;
-  let loadingTimer: ReturnType<typeof setInterval> | undefined;
-  let loadingActive = false;
-  let loadingFrameIndex = 0;
-  let loadingFrames = createLoadingBarFrames(currentConfig.loadingBar);
+  let borderChaseTimer: ReturnType<typeof setInterval> | undefined;
+  let borderChaseActive = false;
+  let borderChaseFrameIndex = 0;
   let workingMessage: string | undefined;
 
   function requestUiRender(): void {
@@ -61,42 +62,28 @@ export default function (pi: ExtensionAPI) {
     requestFooterRender?.();
   }
 
-  function refreshLoadingFrames(): void {
-    loadingFrames = createLoadingBarFrames(currentConfig.loadingBar);
-    loadingFrameIndex = loadingFrames.length > 0 ? loadingFrameIndex % loadingFrames.length : 0;
-  }
-
-  function currentLoadingFrame(): string | undefined {
-    if (!loadingActive || loadingFrames.length === 0) return undefined;
-    return loadingFrames[loadingFrameIndex] ?? loadingFrames[0];
-  }
-
-  function stopLoadingBar(render = true): void {
-    const wasRunning = loadingActive || loadingTimer !== undefined;
-    if (loadingTimer) {
-      clearInterval(loadingTimer);
-      loadingTimer = undefined;
+  function stopBorderChase(render = true): void {
+    const wasRunning = borderChaseActive || borderChaseTimer !== undefined;
+    if (borderChaseTimer) {
+      clearInterval(borderChaseTimer);
+      borderChaseTimer = undefined;
     }
-    loadingActive = false;
-    loadingFrameIndex = 0;
+    borderChaseActive = false;
+    borderChaseFrameIndex = 0;
     if (render && wasRunning) requestUiRender();
   }
 
-  function startLoadingBar(): void {
+  function startBorderChase(): void {
     if (!hasPromptUi) return;
 
-    stopLoadingBar(false);
-    refreshLoadingFrames();
-    if (loadingFrames.length === 0) return;
-
-    loadingActive = true;
-    loadingFrameIndex = 0;
-    loadingTimer = setInterval(() => {
-      if (loadingFrames.length === 0) return;
-      loadingFrameIndex = (loadingFrameIndex + 1) % loadingFrames.length;
+    stopBorderChase(false);
+    borderChaseActive = true;
+    borderChaseFrameIndex = 0;
+    borderChaseTimer = setInterval(() => {
+      borderChaseFrameIndex = (borderChaseFrameIndex + 1) % BORDER_CHASE_FRAME_COUNT;
       requestUiRender();
-    }, currentConfig.loadingBar.intervalMs);
-    loadingTimer.unref?.();
+    }, BORDER_CHASE_INTERVAL_MS);
+    borderChaseTimer.unref?.();
     requestUiRender();
   }
 
@@ -194,8 +181,8 @@ export default function (pi: ExtensionAPI) {
           const thinkingLevel = getThinkingLevel(ctx);
           return {
             meta: buildEditorMeta(ctx, git.current(), thinkingLevel),
-            loadingFrameIndex: loadingActive && loadingFrames.length > 0 ? loadingFrameIndex : undefined,
-            loadingFrameCount: loadingFrames.length,
+            chaseFrameIndex: borderChaseActive ? borderChaseFrameIndex : undefined,
+            chaseFrameCount: BORDER_CHASE_FRAME_COUNT,
             workingMessage,
           };
         },
@@ -221,7 +208,6 @@ export default function (pi: ExtensionAPI) {
             usage.current(),
             width,
             theme,
-            currentLoadingFrame(),
           );
         },
       };
@@ -229,7 +215,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", () => {
-    stopLoadingBar(false);
+    stopBorderChase(false);
     stopProjectRefresh();
     cleanupUsageListener?.();
     cleanupUsageListener = undefined;
@@ -242,11 +228,11 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("agent_start", () => {
-    startLoadingBar();
+    startBorderChase();
   });
 
   pi.on("agent_end", () => {
-    stopLoadingBar();
+    stopBorderChase();
   });
 
   pi.on("turn_end", () => {

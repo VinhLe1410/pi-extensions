@@ -17,15 +17,6 @@ function formatCwdLabel(cwd: string): string {
   return parts[parts.length - 1] ?? cwd;
 }
 
-function renderLoadingBar(frame: string | undefined, trackChar: string, theme: Theme): string {
-  if (!frame) return "";
-
-  const dot = Array.from(trackChar)[0] ?? "·";
-  return Array.from(frame)
-    .map((char) => theme.fg(char === dot ? "dim" : "accent", char))
-    .join("");
-}
-
 function renderCwd(ctx: ExtensionContext, theme: Theme): string {
   return theme.fg("accent", `󰝰 ${formatCwdLabel(ctx.cwd)}`);
 }
@@ -197,17 +188,11 @@ export function renderStatusFooter(
   usageSnapshot: UsageSnapshot | null,
   width: number,
   theme: Theme,
-  loadingBarFrame?: string,
 ): string[] {
   if (width <= 0) return [""];
 
   const separator = theme.fg("dim", FOOTER_SEPARATOR);
-  const left = [
-    renderLoadingBar(loadingBarFrame, config.loadingBar.trackChar, theme),
-    renderCwd(ctx, theme),
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const left = renderCwd(ctx, theme);
   const right = renderQuotaBadges(usageSnapshot, theme);
   const extensionStatuses = collectExtensionStatusSegments(
     footerData.getExtensionStatuses(),

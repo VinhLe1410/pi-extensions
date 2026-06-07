@@ -11,13 +11,6 @@ export interface UsageSnapshot {
   fetchedAt: number;
 }
 
-export interface GitCache {
-  branch: string | null;
-  dirty: boolean;
-  ahead: number;
-  behind: number;
-}
-
 export interface AuthEntry {
   key?: string;
   access?: string;

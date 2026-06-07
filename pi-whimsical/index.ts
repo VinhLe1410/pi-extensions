@@ -71,11 +71,11 @@ const longMessages = [
   "Installing random scripts",
 ];
 
-const messages = [...shortMessages, ...longMessages];
+const workingMessages = [...shortMessages, ...longMessages];
 export const WHIMSICAL_WORKING_MESSAGE_EVENT = "pi-whimsical:working-message";
 
 function pickRandom(): string {
-  return messages[Math.floor(Math.random() * messages.length)]!;
+  return workingMessages[Math.floor(Math.random() * workingMessages.length)]!;
 }
 
 export default function (pi: ExtensionAPI) {

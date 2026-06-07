@@ -1,11 +1,6 @@
-import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import type { ThemeColor } from "@earendil-works/pi-coding-agent";
 
-export const SEPARATOR = "  ";
 export const RESET_ICON = "";
-
-export function separator(theme: Theme): string {
-  return theme.fg("dim", SEPARATOR);
-}
 
 export function percentColor(percent: number): ThemeColor {
   if (percent >= 85) return "error";
