@@ -9,6 +9,7 @@ import { collectExtensionStatusSegments } from "./extension-status";
 import { percentColor, RESET_ICON } from "./theme";
 
 const FOOTER_SEPARATOR = " | ";
+const FOOTER_SIDE_PADDING = 1;
 
 function formatCwdLabel(cwd: string): string {
   const normalized = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -138,6 +139,8 @@ export function renderStatusFooter(
 ): string[] {
   if (width <= 0) return [""];
 
+  const sidePadding = width >= FOOTER_SIDE_PADDING * 2 ? FOOTER_SIDE_PADDING : 0;
+  const innerWidth = Math.max(0, width - sidePadding * 2);
   const separator = theme.fg("dim", FOOTER_SEPARATOR);
   const left = renderCwd(ctx, theme);
   const right = renderQuotaBadges(usageSnapshot, theme);
@@ -148,7 +151,7 @@ export function renderStatusFooter(
     right,
     extensionStatuses.map((segment) => renderExtensionStatus(segment.text)),
     separator,
-    width,
+    innerWidth,
   );
-  return [truncateToWidth(content, width, "")];
+  return [`${" ".repeat(sidePadding)}${truncateToWidth(content, innerWidth, "")}${" ".repeat(sidePadding)}`];
 }

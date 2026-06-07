@@ -19,9 +19,9 @@ import { contextColor, thinkingColor } from "./theme";
 const RAIL_GAP = " ";
 const RIGHT_RAIL_GAP = " ";
 const CONTEXT_METER_WIDTH = 18;
-const CHASE_TRAIL_LENGTH = 80;
-const CHASE_HEAVY_LENGTH = 40;
-const CHASE_HEAD_LENGTH = 15;
+const CHASE_TRAIL_RATIO = 0.5;
+const CHASE_HEAVY_RATIO = 0.5;
+const CHASE_HEAD_RATIO = 0.2;
 
 export interface EditorContextMeter {
   percent: number;
@@ -52,6 +52,9 @@ export interface EditorChrome {
 interface BorderChase {
   head: number;
   perimeter: number;
+  trailLength: number;
+  heavyLength: number;
+  headLength: number;
 }
 
 type AutocompleteEditorInternals = {
@@ -113,19 +116,28 @@ export class PolishedInputEditor extends CustomEditor {
     const editorLines = editorFrame.slice(1, -1);
     const metadata = this.renderMetadata(meta, innerWidth);
     const lines = ["", ...editorLines, "", metadata];
-    const chase = this.createBorderChase(width, lines.length, chrome);
+    const hasSuggestions = autocompleteLines.length > 0;
+    const rowCount = lines.length + autocompleteLines.length + (hasSuggestions ? 1 : 0);
+    const chase = this.createBorderChase(width, rowCount, chrome);
     const top = this.renderTopBorder(width, chase, chrome.workingMessage);
-    const bottom = this.renderBottomBorder(width, lines.length, chase);
+    const rows = lines.map((line, index) =>
+      this.renderContentRow(line, index, rowCount, width, innerWidth, chase),
+    );
+
+    if (hasSuggestions) {
+      rows.push(this.renderSuggestionDivider(width, lines.length, rowCount, chase));
+      rows.push(
+        ...autocompleteLines.map((line, index) =>
+          this.renderContentRow(line, lines.length + 1 + index, rowCount, width, innerWidth, chase),
+        ),
+      );
+    }
 
     return clampRenderedLines(
       [
         top,
-        ...lines.map(
-          (line, index) =>
-            `${this.renderRail(index, lines.length, width, chase)}${this.fillLine(line, innerWidth)}${this.renderRightRail(index, lines.length, width, chase)}`,
-        ),
-        bottom,
-        ...autocompleteLines,
+        ...rows,
+        this.renderBottomBorder(width, rowCount, chase),
       ],
       width,
     );
@@ -151,6 +163,17 @@ export class PolishedInputEditor extends CustomEditor {
     };
   }
 
+  private renderContentRow(
+    line: string,
+    rowIndex: number,
+    rowCount: number,
+    width: number,
+    innerWidth: number,
+    chase?: BorderChase,
+  ): string {
+    return `${this.renderRail(rowIndex, rowCount, width, chase)}${this.fillLine(line, innerWidth)}${this.renderRightRail(rowIndex, rowCount, width, chase)}`;
+  }
+
   private renderRail(
     rowIndex?: number,
     rowCount?: number,
@@ -161,8 +184,7 @@ export class PolishedInputEditor extends CustomEditor {
       return this.borderColor("│") + RAIL_GAP;
     }
 
-    const pathIndex = width * 2 + rowCount + (rowCount - 1 - rowIndex);
-    return this.renderBorderCell("│", pathIndex, chase, "border") + RAIL_GAP;
+    return this.renderLeftRailCell("│", rowIndex, rowCount, width, chase) + RAIL_GAP;
   }
 
   private renderRightRail(
@@ -175,8 +197,28 @@ export class PolishedInputEditor extends CustomEditor {
       return RIGHT_RAIL_GAP + this.borderColor("│");
     }
 
+    return RIGHT_RAIL_GAP + this.renderRightRailCell("│", rowIndex, width, chase);
+  }
+
+  private renderLeftRailCell(
+    char: string,
+    rowIndex: number,
+    rowCount: number,
+    width: number,
+    chase?: BorderChase,
+  ): string {
+    const pathIndex = width * 2 + rowCount + (rowCount - 1 - rowIndex);
+    return this.renderBorderCell(char, pathIndex, chase, "border");
+  }
+
+  private renderRightRailCell(
+    char: string,
+    rowIndex: number,
+    width: number,
+    chase?: BorderChase,
+  ): string {
     const pathIndex = width + rowIndex;
-    return RIGHT_RAIL_GAP + this.renderBorderCell("│", pathIndex, chase, "border");
+    return this.renderBorderCell(char, pathIndex, chase, "border");
   }
 
   private renderTopBorder(width: number, chase?: BorderChase, workingMessage?: string): string {
@@ -202,6 +244,20 @@ export class PolishedInputEditor extends CustomEditor {
       .join("");
   }
 
+  private renderSuggestionDivider(
+    width: number,
+    rowIndex: number,
+    rowCount: number,
+    chase?: BorderChase,
+  ): string {
+    return Array.from({ length: Math.max(0, width) }, (_, index) => {
+      if (width <= 1) return this.labelTheme.fg("borderMuted", "─");
+      if (index === 0) return this.renderLeftRailCell("├", rowIndex, rowCount, width, chase);
+      if (index === width - 1) return this.renderRightRailCell("┤", rowIndex, width, chase);
+      return this.labelTheme.fg("borderMuted", "─");
+    }).join("");
+  }
+
   private renderBottomBorder(width: number, rowCount: number, chase?: BorderChase): string {
     return Array.from({ length: Math.max(0, width) }, (_, index) => {
       const char = width <= 1 ? "─" : index === 0 ? "└" : index === width - 1 ? "┘" : "─";
@@ -219,9 +275,13 @@ export class PolishedInputEditor extends CustomEditor {
 
     const perimeter = Math.max(1, width * 2 + rowCount * 2);
     const progress = (chrome.chaseFrameIndex % chrome.chaseFrameCount) / chrome.chaseFrameCount;
+    const trailLength = Math.round(perimeter * CHASE_TRAIL_RATIO);
     return {
       head: Math.floor(progress * perimeter),
       perimeter,
+      trailLength,
+      heavyLength: Math.round(trailLength * CHASE_HEAVY_RATIO),
+      headLength: Math.round(trailLength * CHASE_HEAD_RATIO),
     };
   }
 
@@ -232,8 +292,8 @@ export class PolishedInputEditor extends CustomEditor {
     baseColor: "border" | "borderMuted",
   ): string {
     const distance = chase ? this.chaseDistance(pathIndex, chase) : undefined;
-    if (distance !== undefined && distance <= CHASE_TRAIL_LENGTH) {
-      return this.renderChaseCell(char, distance, baseColor);
+    if (distance !== undefined && chase && distance <= chase.trailLength) {
+      return this.renderChaseCell(char, distance, chase, baseColor);
     }
 
     return baseColor === "border" ? this.borderColor(char) : this.labelTheme.fg("borderMuted", char);
@@ -242,18 +302,19 @@ export class PolishedInputEditor extends CustomEditor {
   private renderChaseCell(
     char: string,
     distance: number,
+    chase: BorderChase,
     baseColor: "border" | "borderMuted",
   ): string {
     const accent = this.themeRgb("borderAccent");
     const base = this.themeRgb(baseColor);
-    const isHead = distance <= CHASE_HEAD_LENGTH;
-    const glyph = distance <= CHASE_HEAVY_LENGTH ? heavyBorderChar(char) : char;
-    const intensity = isHead ? 1 : 1 - distance / (CHASE_TRAIL_LENGTH + 1);
+    const isHead = distance <= chase.headLength;
+    const glyph = distance <= chase.heavyLength ? heavyBorderChar(char) : char;
+    const intensity = isHead ? 1 : 1 - distance / (chase.trailLength + 1);
     const easedIntensity = intensity * intensity;
 
     if (!accent || !base) {
       if (isHead) return this.labelTheme.bold(this.labelTheme.fg("borderAccent", glyph));
-      if (distance <= CHASE_HEAVY_LENGTH) return this.labelTheme.fg("borderAccent", glyph);
+      if (distance <= chase.heavyLength) return this.labelTheme.fg("borderAccent", glyph);
       return baseColor === "border" ? this.borderColor(char) : this.labelTheme.fg("borderMuted", char);
     }
 
