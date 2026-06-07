@@ -31,7 +31,7 @@ export type PromptUiConfig = {
 type ConfigRecord = Record<string, unknown>;
 
 const MIN_PROJECT_REFRESH_INTERVAL_MS = 5_000;
-export const configPath = join(getAgentDir(), "prompt-ui.json");
+export const configPath = join(getAgentDir(), "slot-machine-ui.json");
 
 export const defaultConfig: PromptUiConfig = {
   projectRefreshIntervalMs: PROJECT_REFRESH_INTERVAL_MS,

@@ -19,10 +19,10 @@ import { createGitState } from "./seams/git";
 import { createUsageState } from "./seams/usage-state";
 import { PolishedInputEditor } from "./ui/editor";
 import { buildEditorMeta, getThinkingLevel } from "./ui/editor-meta";
-import { registerPromptUiSettingsCommand } from "./ui/settings-command";
+import { registerSlotMachineUiSettingsCommand } from "./ui/settings-command";
 import { renderStatusFooter } from "./ui/status-footer";
+import { pickWorkingMessage } from "./whimsical/messages";
 
-const WHIMSICAL_WORKING_MESSAGE_EVENT = "pi-whimsical:working-message";
 const BORDER_CHASE_INTERVAL_MS = 50;
 const BORDER_CHASE_CYCLE_MS = 850;
 const BORDER_CHASE_FRAME_COUNT = Math.max(1, Math.round(BORDER_CHASE_CYCLE_MS / BORDER_CHASE_INTERVAL_MS));
@@ -140,12 +140,7 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  pi.events.on(WHIMSICAL_WORKING_MESSAGE_EVENT, (message) => {
-    workingMessage = typeof message === "string" && message.length > 0 ? message : undefined;
-    requestUiRender();
-  });
-
-  registerPromptUiSettingsCommand(pi, {
+  registerSlotMachineUiSettingsCommand(pi, {
     getConfig: () => currentConfig,
     getActiveExtensionStatuses: () => getActiveExtensionStatuses(),
     setExtensionStatusPlacement(key: string, placement: ExtensionStatusPlacement) {
@@ -164,6 +159,9 @@ export default function (pi: ExtensionAPI) {
     }
 
     hasPromptUi = ctx.mode === "tui";
+    ctx.ui.setWorkingMessage();
+    ctx.ui.setWorkingIndicator();
+    ctx.ui.setWorkingVisible(false);
     startProjectRefresh(ctx.cwd);
     startUsageForProvider(ctx.model?.provider);
     cleanupUsageListener?.();
@@ -214,7 +212,7 @@ export default function (pi: ExtensionAPI) {
     });
   });
 
-  pi.on("session_shutdown", () => {
+  pi.on("session_shutdown", (_event, ctx) => {
     stopBorderChase(false);
     stopProjectRefresh();
     cleanupUsageListener?.();
@@ -225,6 +223,16 @@ export default function (pi: ExtensionAPI) {
     hasPromptUi = false;
     workingMessage = undefined;
     usage.stop();
+
+    if (!ctx.hasUI) return;
+    ctx.ui.setWorkingMessage();
+    ctx.ui.setWorkingIndicator();
+    ctx.ui.setWorkingVisible(true);
+  });
+
+  pi.on("turn_start", () => {
+    workingMessage = pickWorkingMessage();
+    requestUiRender();
   });
 
   pi.on("agent_start", () => {
@@ -236,6 +244,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("turn_end", () => {
+    workingMessage = undefined;
     scheduleProjectRefresh();
     activeTui?.requestRender();
   });

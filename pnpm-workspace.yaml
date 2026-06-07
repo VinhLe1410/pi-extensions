@@ -1,10 +1,9 @@
 packages:
   - pi-codex-search
   - pi-git-commit
-  - pi-prompt-ui
+  - pi-slot-machine-ui
   - pi-subagents
   - pi-usage-heatmap
-  - pi-whimsical
 allowBuilds:
   "@google/genai": true
   koffi: true

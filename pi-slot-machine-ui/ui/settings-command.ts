@@ -41,12 +41,12 @@ function buildStatusItems(
     });
 }
 
-export function registerPromptUiSettingsCommand(
+export function registerSlotMachineUiSettingsCommand(
   pi: ExtensionAPI,
   deps: SettingsCommandDeps,
 ): void {
-  pi.registerCommand("prompt-ui", {
-    description: "Configure prompt UI footer status placement",
+  pi.registerCommand("slot-machine-ui", {
+    description: "Configure slot-machine UI footer status placement",
     handler: async (_args, ctx) => {
       if (!ctx.hasUI) return;
 
@@ -68,7 +68,7 @@ export function registerPromptUiSettingsCommand(
                 tui.requestRender();
               } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
-                ctx.ui.notify(`Could not update prompt UI settings: ${message}`, "error");
+                ctx.ui.notify(`Could not update slot-machine UI settings: ${message}`, "error");
               }
             },
             () => done(undefined),
@@ -83,7 +83,7 @@ export function registerPromptUiSettingsCommand(
             const empty = activeCount === 0;
             return [
               truncateToWidth(border, width, ""),
-              truncateToWidth(theme.fg("accent", theme.bold("Prompt UI settings")), width, ""),
+              truncateToWidth(theme.fg("accent", theme.bold("Slot machine UI settings")), width, ""),
               truncateToWidth(
                 theme.fg("muted", "Move active ctx.ui.setStatus() footer statuses"),
                 width,

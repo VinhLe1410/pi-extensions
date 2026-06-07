@@ -1,5 +1,3 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-
 const shortMessages = [
   "Combobulating",
   "Concocting",
@@ -72,33 +70,7 @@ const longMessages = [
 ];
 
 const workingMessages = [...shortMessages, ...longMessages];
-export const WHIMSICAL_WORKING_MESSAGE_EVENT = "pi-whimsical:working-message";
 
-function pickRandom(): string {
+export function pickWorkingMessage(): string {
   return workingMessages[Math.floor(Math.random() * workingMessages.length)]!;
-}
-
-export default function (pi: ExtensionAPI) {
-  pi.on("session_start", async (_event, ctx) => {
-    if (!ctx.hasUI) return;
-    ctx.ui.setWorkingMessage();
-    ctx.ui.setWorkingIndicator();
-    ctx.ui.setWorkingVisible(false);
-  });
-
-  pi.on("turn_start", async () => {
-    pi.events.emit(WHIMSICAL_WORKING_MESSAGE_EVENT, pickRandom());
-  });
-
-  pi.on("turn_end", async () => {
-    pi.events.emit(WHIMSICAL_WORKING_MESSAGE_EVENT, undefined);
-  });
-
-  pi.on("session_shutdown", async (_event, ctx) => {
-    pi.events.emit(WHIMSICAL_WORKING_MESSAGE_EVENT, undefined);
-    if (!ctx.hasUI) return;
-    ctx.ui.setWorkingMessage();
-    ctx.ui.setWorkingIndicator();
-    ctx.ui.setWorkingVisible(true);
-  });
 }
