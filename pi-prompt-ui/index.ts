@@ -224,6 +224,7 @@ export default function (pi: ExtensionAPI) {
             git.current(),
             runtime,
             currentConfig,
+            usage.current(),
             width,
             theme,
             currentLoadingFrame(),

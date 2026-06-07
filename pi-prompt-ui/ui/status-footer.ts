@@ -1,4 +1,3 @@
-import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type {
   ExtensionContext,
   ReadonlyFooterDataProvider,
@@ -6,10 +5,11 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { PromptUiConfig } from "../core/config";
+import type { RateWindow, UsageSnapshot } from "../core/types";
 import type { GitStatusSummary } from "../seams/git";
 import type { RuntimeInfo } from "../seams/runtime";
 import { collectExtensionStatusSegments } from "./extension-status";
-import { contextColor } from "./theme";
+import { percentColor, RESET_ICON } from "./theme";
 
 const FOOTER_SEPARATOR = " | ";
 
@@ -39,12 +39,6 @@ const terminalStyleModifiers = new Map([
   ["italic", 3],
   ["underline", 4],
 ]);
-
-function formatCount(value: number): string {
-  if (value < 1000) return `${value}`;
-  if (value < 10_000) return `${(value / 1000).toFixed(1)}k`;
-  return `${Math.round(value / 1000)}k`;
-}
 
 function formatCwdLabel(cwd: string): string {
   const normalized = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -148,42 +142,41 @@ function renderRuntime(runtime: RuntimeInfo | undefined, theme: Theme): string {
   return `${theme.fg("dim", "via")} ${renderTerminalStyle(runtime.style, label)}`;
 }
 
-function renderContext(ctx: ExtensionContext, theme: Theme): string {
-  const usage = ctx.getContextUsage();
-  const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow;
-  if (!usage || !contextWindow || contextWindow <= 0) return theme.fg("dim", "ctx --");
-
-  const percent = usage.percent ?? ((usage.tokens ?? 0) / contextWindow) * 100;
-  const clamped = Math.max(0, Math.min(999, Math.round(percent)));
-  return [
-    theme.fg("dim", "ctx "),
-    theme.fg(contextColor(clamped), `${clamped}%`),
-    theme.fg("dim", `/${formatCount(contextWindow)}`),
-  ].join("");
-}
-
-function getUsageTotals(ctx: ExtensionContext): { input: number; output: number; cost: number } {
-  let input = 0;
-  let output = 0;
-  let cost = 0;
-
-  for (const entry of ctx.sessionManager.getBranch()) {
-    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
-    const message = entry.message as AssistantMessage;
-    input += message.usage?.input ?? 0;
-    output += message.usage?.output ?? 0;
-    cost += message.usage?.cost?.total ?? 0;
+function usageWindows(snapshot: UsageSnapshot | null): RateWindow[] {
+  if (!snapshot) return [];
+  if (snapshot.provider.toLowerCase() === "copilot") {
+    return snapshot.windows.filter(
+      (window) => window.label.toLowerCase() === "premium",
+    );
   }
-
-  return { input, output, cost };
+  return snapshot.windows;
 }
 
-function renderTokens(totals: { input: number; output: number }, theme: Theme): string {
-  return theme.fg("dim", `↑${formatCount(totals.input)} ↓${formatCount(totals.output)}`);
+function formatQuotaWindowLabel(label: string): string {
+  const normalized = label.trim().toLowerCase();
+  if (normalized === "week" || normalized === "weekly" || normalized === "7d") return "7D";
+  if (normalized === "5h") return "5H";
+  if (normalized === "premium") return "PREM";
+  return label.trim().toUpperCase();
 }
 
-function renderCost(cost: number, theme: Theme): string {
-  return theme.fg("success", `$${cost.toFixed(3)}`);
+function renderQuotaBadge(window: RateWindow, theme: Theme): string {
+  const rounded = Math.max(0, Math.min(999, Math.round(window.usedPercent)));
+  const reset = window.resetsIn ? theme.fg("dim", ` ${RESET_ICON} ${window.resetsIn}`) : "";
+  const content = [
+    theme.fg("muted", ` ${formatQuotaWindowLabel(window.label)} `),
+    theme.bold(theme.fg(percentColor(rounded), `${rounded}%`)),
+    reset,
+    " ",
+  ].join("");
+
+  return theme.bg("toolPendingBg", content);
+}
+
+function renderQuotaBadges(snapshot: UsageSnapshot | null, theme: Theme): string {
+  return usageWindows(snapshot)
+    .map((window) => renderQuotaBadge(window, theme))
+    .join(theme.fg("borderMuted", " "));
 }
 
 function renderStatusChip(text: string, theme: Theme): string {
@@ -314,6 +307,7 @@ export function renderStatusFooter(
   git: GitStatusSummary,
   runtime: RuntimeInfo | undefined,
   config: PromptUiConfig,
+  usageSnapshot: UsageSnapshot | null,
   width: number,
   theme: Theme,
   loadingBarFrame?: string,
@@ -321,7 +315,6 @@ export function renderStatusFooter(
   if (width <= 0) return [""];
 
   const separator = theme.fg("dim", FOOTER_SEPARATOR);
-  const totals = getUsageTotals(ctx);
   const left = [
     renderLoadingBar(loadingBarFrame, config.loadingBar.trackChar, theme),
     renderCwd(ctx, theme),
@@ -330,9 +323,7 @@ export function renderStatusFooter(
   ]
     .filter(Boolean)
     .join(" ");
-  const right = [renderContext(ctx, theme), renderTokens(totals, theme), renderCost(totals.cost, theme)].join(
-    separator,
-  );
+  const right = renderQuotaBadges(usageSnapshot, theme);
   const extensionStatuses = collectExtensionStatusSegments(
     footerData.getExtensionStatuses(),
     config,
