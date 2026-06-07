@@ -136,7 +136,7 @@ export class PolishedInputEditor extends CustomEditor {
   private renderIdentityBadge(meta: EditorMeta): string {
     const model = this.labelTheme.bg(
       "toolPendingBg",
-      this.labelTheme.fg("accent", ` ${meta.modelLabel} `),
+      this.labelTheme.bold(this.labelTheme.fg("text", ` ${meta.modelLabel} `)),
     );
     const effort = this.renderEffortBadge(meta.thinkingLevel);
 
