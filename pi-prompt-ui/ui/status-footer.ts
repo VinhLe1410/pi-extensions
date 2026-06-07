@@ -214,7 +214,7 @@ export function renderStatusFooter(
     config,
   );
   const renderExtensionStatus = (text: string) => renderStatusChip(text, theme);
-  const innerWidth = Math.max(1, width - 2);
+  const innerWidth = width;
   const content = composeFooter(
     left,
     right,
@@ -224,6 +224,5 @@ export function renderStatusFooter(
     separator,
     innerWidth,
   );
-  const framed = width > 2 ? ` ${content} ` : content;
-  return [truncateToWidth(framed, width, "")];
+  return [truncateToWidth(content, width, "")];
 }
