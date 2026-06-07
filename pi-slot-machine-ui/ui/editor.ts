@@ -199,7 +199,9 @@ export class PolishedInputEditor extends CustomEditor {
   }
 
   private renderTopBorder(width: number, chase?: BorderChase, workingMessage?: string): string {
-    const chars: string[] = Array.from({ length: Math.max(0, width) }, () => "─");
+    const chars: string[] = Array.from({ length: Math.max(0, width) }, (_, index) =>
+      width <= 1 ? "▄" : index === 0 || index === width - 1 ? "▄" : "─",
+    );
 
     if (workingMessage && width >= 8) {
       const text = truncateToWidth(workingMessage, Math.max(0, width - 4), "");
@@ -215,20 +217,37 @@ export class PolishedInputEditor extends CustomEditor {
     }
 
     return chars
-      .map((char, index) => this.renderBorderCell(char, index, chase, "borderMuted"))
+      .map((char, index) =>
+        this.renderBorderCell(
+          char,
+          index,
+          chase,
+          width > 1 && (index === 0 || index === width - 1) ? "border" : "borderMuted",
+        ),
+      )
       .join("");
   }
 
   private renderSuggestionDivider(width: number): string {
-    return Array.from({ length: Math.max(0, width) }, () =>
-      this.labelTheme.fg("borderMuted", "─"),
-    ).join("");
+    return Array.from({ length: Math.max(0, width) }, (_, index) => {
+      if (width > 1 && (index === 0 || index === width - 1)) {
+        return this.renderRailBackgroundCell("border");
+      }
+
+      return this.labelTheme.fg("borderMuted", "─");
+    }).join("");
   }
 
   private renderBottomBorder(width: number, rowCount: number, chase?: BorderChase): string {
     return Array.from({ length: Math.max(0, width) }, (_, index) => {
+      const char = width <= 1 ? "▀" : index === 0 || index === width - 1 ? "▀" : "─";
       const pathIndex = width + rowCount + (width - 1 - index);
-      return this.renderBorderCell("─", pathIndex, chase, "borderMuted");
+      return this.renderBorderCell(
+        char,
+        pathIndex,
+        chase,
+        width > 1 && (index === 0 || index === width - 1) ? "border" : "borderMuted",
+      );
     }).join("");
   }
 
@@ -306,7 +325,7 @@ export class PolishedInputEditor extends CustomEditor {
     baseColor: "border" | "borderMuted",
   ): string {
     const accent = this.themeRgb("borderAccent");
-    const base = this.themeRgb(baseColor);
+    const base = baseColor === "border" ? this.currentBorderRgb() : this.themeRgb(baseColor);
     const isHead = distance <= chase.headLength;
     const glyph = distance <= chase.heavyLength ? heavyBorderChar(char) : char;
     const intensity = isHead ? 1 : 1 - distance / (chase.trailLength + 1);
