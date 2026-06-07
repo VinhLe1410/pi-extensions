@@ -40,6 +40,7 @@ export interface EditorChrome {
   meta: EditorMeta;
   loadingFrameIndex?: number;
   loadingFrameCount?: number;
+  workingMessage?: string;
 }
 
 interface BorderChase {
@@ -188,7 +189,7 @@ export class PolishedInputEditor extends CustomEditor {
     const metadata = this.renderMetadata(meta, innerWidth);
     const lines = ["", ...editorLines, "", metadata];
     const chase = this.createBorderChase(width, lines.length, chrome);
-    const top = this.renderTopBorder(width, chase);
+    const top = this.renderTopBorder(width, chase, chrome.workingMessage);
     const bottom = this.renderBottomBorder(width, lines.length, chase);
 
     return clampRenderedLines(
@@ -233,11 +234,27 @@ export class PolishedInputEditor extends CustomEditor {
     return RIGHT_RAIL_GAP + this.renderBorderCell("│", pathIndex, chase, "border");
   }
 
-  private renderTopBorder(width: number, chase?: BorderChase): string {
-    return Array.from({ length: Math.max(0, width) }, (_, index) => {
-      const char = width <= 1 ? "─" : index === 0 ? "┌" : index === width - 1 ? "┐" : "─";
-      return this.renderBorderCell(char, index, chase, "borderMuted");
-    }).join("");
+  private renderTopBorder(width: number, chase?: BorderChase, workingMessage?: string): string {
+    const chars: string[] = Array.from({ length: Math.max(0, width) }, (_, index) =>
+      width <= 1 ? "─" : index === 0 ? "┌" : index === width - 1 ? "┐" : "─",
+    );
+
+    if (workingMessage && width >= 8) {
+      const text = truncateToWidth(workingMessage, Math.max(0, width - 4), "");
+      const label = Array.from(` ${text} `);
+      const labelWidth = visibleWidth(label.join(""));
+
+      if (labelWidth > 0 && labelWidth <= width - 2) {
+        const start = Math.max(1, Math.floor((width - labelWidth) / 2));
+        for (let offset = 0; offset < label.length && start + offset < width - 1; offset += 1) {
+          chars[start + offset] = label[offset]!;
+        }
+      }
+    }
+
+    return chars
+      .map((char, index) => this.renderBorderCell(char, index, chase, "borderMuted"))
+      .join("");
   }
 
   private renderBottomBorder(width: number, rowCount: number, chase?: BorderChase): string {

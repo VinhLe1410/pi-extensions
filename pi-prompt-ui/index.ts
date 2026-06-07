@@ -23,6 +23,8 @@ import { createLoadingBarFrames } from "./ui/loading-bar";
 import { registerPromptUiSettingsCommand } from "./ui/settings-command";
 import { renderStatusFooter } from "./ui/status-footer";
 
+const WHIMSICAL_WORKING_MESSAGE_EVENT = "pi-whimsical:working-message";
+
 function detectProvider(modelProvider: string | undefined): string | null {
   return modelProvider ? PROVIDER_MAP[modelProvider] || null : null;
 }
@@ -49,6 +51,7 @@ export default function (pi: ExtensionAPI) {
   let loadingActive = false;
   let loadingFrameIndex = 0;
   let loadingFrames = createLoadingBarFrames(currentConfig.loadingBar);
+  let workingMessage: string | undefined;
 
   function requestUiRender(): void {
     if (activeTui) {
@@ -150,6 +153,11 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
+  pi.events.on(WHIMSICAL_WORKING_MESSAGE_EVENT, (message) => {
+    workingMessage = typeof message === "string" && message.length > 0 ? message : undefined;
+    requestUiRender();
+  });
+
   registerPromptUiSettingsCommand(pi, {
     getConfig: () => currentConfig,
     getActiveExtensionStatuses: () => getActiveExtensionStatuses(),
@@ -188,6 +196,7 @@ export default function (pi: ExtensionAPI) {
             meta: buildEditorMeta(ctx, git.current(), thinkingLevel),
             loadingFrameIndex: loadingActive && loadingFrames.length > 0 ? loadingFrameIndex : undefined,
             loadingFrameCount: loadingFrames.length,
+            workingMessage,
           };
         },
         ctx.ui.theme,
@@ -228,6 +237,7 @@ export default function (pi: ExtensionAPI) {
     getActiveExtensionStatuses = () => new Map();
     activeTui = undefined;
     hasPromptUi = false;
+    workingMessage = undefined;
     usage.stop();
   });
 

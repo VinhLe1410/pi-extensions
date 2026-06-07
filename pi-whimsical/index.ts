@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const shortMessages = [
   "Combobulating",
@@ -72,71 +72,33 @@ const longMessages = [
 ];
 
 const messages = [...shortMessages, ...longMessages];
-const WAVE_INTERVAL_MS = 50;
-const WAVE_CYCLE_MS = 850;
-const WAVE_FRAMES = Math.max(1, Math.round(WAVE_CYCLE_MS / WAVE_INTERVAL_MS));
-const WAVE_TRAIL = 3;
+export const WHIMSICAL_WORKING_MESSAGE_EVENT = "pi-whimsical:working-message";
 
 function pickRandom(): string {
   return messages[Math.floor(Math.random() * messages.length)]!;
 }
 
-function renderWave(message: string, theme: Theme, frame: number): string {
-  const chars = Array.from(message);
-  if (chars.length === 0) return "";
-
-  const progress = (frame % WAVE_FRAMES) / WAVE_FRAMES;
-  const center = progress * (chars.length + WAVE_TRAIL * 2) - WAVE_TRAIL;
-  return chars
-    .map((char, index) => {
-      const distance = Math.abs(index - center);
-      if (distance <= 0.5) return theme.bold(theme.fg("accent", char));
-      if (distance <= 1.5) return theme.fg("accent", char);
-      if (distance <= WAVE_TRAIL) return theme.fg("muted", char);
-      return theme.fg("dim", char);
-    })
-    .join("");
-}
-
 export default function (pi: ExtensionAPI) {
-  let animationTimer: ReturnType<typeof setInterval> | undefined;
-
-  function stopAnimation(): void {
-    if (!animationTimer) return;
-    clearInterval(animationTimer);
-    animationTimer = undefined;
-  }
-
-  function startAnimation(ctx: ExtensionContext): void {
-    stopAnimation();
-    if (!ctx.hasUI) return;
-
-    const message = pickRandom();
-    let frame = 0;
-    const render = () => ctx.ui.setWorkingMessage(renderWave(message, ctx.ui.theme, frame++));
-
-    ctx.ui.setWorkingIndicator({ frames: [] });
-    render();
-    animationTimer = setInterval(render, WAVE_INTERVAL_MS);
-    animationTimer.unref?.();
-  }
-
-  function resetWorkingRow(ctx: ExtensionContext): void {
-    stopAnimation();
+  pi.on("session_start", async (_event, ctx) => {
     if (!ctx.hasUI) return;
     ctx.ui.setWorkingMessage();
     ctx.ui.setWorkingIndicator();
-  }
-
-  pi.on("turn_start", async (_event, ctx) => {
-    startAnimation(ctx);
+    ctx.ui.setWorkingVisible(false);
   });
 
-  pi.on("turn_end", async (_event, ctx) => {
-    resetWorkingRow(ctx);
+  pi.on("turn_start", async () => {
+    pi.events.emit(WHIMSICAL_WORKING_MESSAGE_EVENT, pickRandom());
   });
 
-  pi.on("session_shutdown", () => {
-    stopAnimation();
+  pi.on("turn_end", async () => {
+    pi.events.emit(WHIMSICAL_WORKING_MESSAGE_EVENT, undefined);
+  });
+
+  pi.on("session_shutdown", async (_event, ctx) => {
+    pi.events.emit(WHIMSICAL_WORKING_MESSAGE_EVENT, undefined);
+    if (!ctx.hasUI) return;
+    ctx.ui.setWorkingMessage();
+    ctx.ui.setWorkingIndicator();
+    ctx.ui.setWorkingVisible(true);
   });
 }
