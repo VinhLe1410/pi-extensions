@@ -5,31 +5,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { RateWindow, UsageSnapshot } from "../core/types";
 import type { UsageState } from "../seams/usage-state";
-import { percentColor, RESET_ICON, thinkingColor } from "./theme";
+import { percentColor, RESET_ICON } from "./theme";
 import type { EditorMeta } from "./editor";
-
-function formatProviderLabel(provider: string | undefined): string {
-  if (!provider) return "Unknown";
-
-  const known: Record<string, string> = {
-    anthropic: "Anthropic",
-    gemini: "Google",
-    google: "Google",
-    "google-gemini-cli": "Google",
-    "github-copilot": "Copilot",
-    "kimi-coding": "Kimi",
-    minimax: "MiniMax",
-    "minimax-cn": "MiniMax CN",
-    ollama: "Ollama",
-    openai: "OpenAI",
-    "openai-codex": "OpenAI",
-  };
-
-  return (
-    known[provider] ??
-    provider.replace(/[-_]/g, " ").replace(/\b\w/g, (char) => char.toUpperCase())
-  );
-}
 
 function usageWindows(snapshot: UsageSnapshot | null): RateWindow[] {
   if (!snapshot) return [];
@@ -66,16 +43,10 @@ export function buildEditorMeta(
   thinkingLevel = getThinkingLevel(ctx),
 ): EditorMeta {
   const modelLabel = ctx.model?.name ?? ctx.model?.id ?? "no-model";
-  const providerLabel = formatProviderLabel(ctx.model?.provider);
 
   return {
-    modelLabel: theme.fg("accent", modelLabel),
-    providerLabel: theme.fg("text", providerLabel),
+    modelLabel,
     thinkingLevel,
-    thinkingLabel:
-      thinkingLevel && thinkingLevel !== "off"
-        ? theme.fg(thinkingColor(thinkingLevel), thinkingLevel)
-        : undefined,
     quotaLabels: usageWindows(usageState.current()).map((window) =>
       renderQuotaWindow(theme, window),
     ),

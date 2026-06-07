@@ -7,14 +7,13 @@ import {
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
+import { thinkingColor } from "./theme";
 
 const RAIL_GAP = " ";
 
 export interface EditorMeta {
   modelLabel: string;
-  providerLabel: string;
   thinkingLevel: string;
-  thinkingLabel?: string;
   quotaLabels: string[];
 }
 
@@ -117,13 +116,10 @@ export class PolishedInputEditor extends CustomEditor {
 
   private renderMetadata(meta: EditorMeta, width: number): string {
     const separator = this.labelTheme.fg("borderMuted", "  ");
-    const left = [meta.modelLabel, meta.providerLabel, meta.thinkingLabel]
-      .filter((part): part is string => Boolean(part))
-      .join(separator);
+    const left = this.renderIdentityBadge(meta);
     const right = meta.quotaLabels.join(separator);
 
     if (!right) return left;
-    if (!left) return truncateToWidth(right, width, "");
 
     const leftWidth = visibleWidth(left);
     const rightWidth = visibleWidth(right);
@@ -135,5 +131,25 @@ export class PolishedInputEditor extends CustomEditor {
     if (availableLeftWidth <= 0) return truncateToWidth(right, width, "");
 
     return `${truncateToWidth(left, availableLeftWidth, "")}${" ".repeat(minimumGap)}${right}`;
+  }
+
+  private renderIdentityBadge(meta: EditorMeta): string {
+    const model = this.labelTheme.bg(
+      "toolPendingBg",
+      this.labelTheme.fg("accent", ` ${meta.modelLabel} `),
+    );
+    const effort = this.renderEffortBadge(meta.thinkingLevel);
+
+    return `${model}${effort}`;
+  }
+
+  private renderEffortBadge(thinkingLevel: string): string {
+    if (!thinkingLevel || thinkingLevel === "off") return "";
+
+    return this.labelTheme.inverse(
+      this.labelTheme.bold(
+        this.labelTheme.fg(thinkingColor(thinkingLevel), ` ${thinkingLevel.toUpperCase()} `),
+      ),
+    );
   }
 }
