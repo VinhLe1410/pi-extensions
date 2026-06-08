@@ -1,7 +1,7 @@
 packages:
   - pi-codex-search
   - pi-git-commit
-  - pi-slot-machine-ui
+  - pi-input-3000
   - pi-subagents
   - pi-usage-heatmap
 allowBuilds:

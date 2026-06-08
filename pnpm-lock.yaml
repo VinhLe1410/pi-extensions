@@ -44,8 +44,6 @@ importers:
 
   pi-git-commit: {}
 
-  pi-slot-machine-ui: {}
-
   pi-subagents:
     dependencies:
       '@earendil-works/pi-coding-agent':
