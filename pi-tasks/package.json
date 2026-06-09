@@ -1,13 +1,13 @@
 {
   "name": "pi-tasks",
   "private": true,
-  "description": "Pi extension for task tracking and coordination",
+  "description": "In-memory Pi task tracker with task dependencies",
   "keywords": [
     "pi-package",
     "pi-extension",
     "tasks",
     "todo",
-    "coordination"
+    "dependencies"
   ],
   "license": "MIT",
   "type": "module",

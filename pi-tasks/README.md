@@ -1,15 +1,17 @@
 # pi-tasks
 
-Pi extension for structured task tracking and coordination inside this extensions workspace.
+In-memory Pi task tracker for the current session.
 
 ## Features
 
-- Task tools: `TaskCreate`, `TaskList`, `TaskGet`, `TaskUpdate`, `TaskOutput`, `TaskStop`, and `TaskExecute`.
-- Persistent task widget above the editor.
-- Session, project, or in-memory task storage.
+- Task tools: `TaskCreate`, `TaskList`, `TaskGet`, and `TaskUpdate`.
+- Task statuses: `pending`, `in_progress`, and `completed`.
 - Dependency tracking with `blocks` and `blockedBy` relationships.
-- Optional subagent execution through the local `pi-subagents` extension.
-- Configurable task display, auto-clear, and auto-cascade behavior through `/tasks`.
+- Live task widget above the editor.
+- Completed lists auto-clear after 5 turns.
+- Interactive `/tasks` menu for viewing, creating, completing, deleting, and clearing tasks.
+
+Tasks are not persisted. Starting a new Pi process starts with an empty task list.
 
 ## Usage
 
@@ -29,20 +31,14 @@ Interactive command:
 /tasks
 ```
 
-Task data is stored according to the `/tasks` settings menu. By default, session-scoped tasks are written under `.pi/tasks/` for the current working directory.
+## Dependency model
 
-## Configuration
+Dependencies are bidirectional:
 
-Settings are saved to `.pi/tasks-config.json` in the current working directory.
+- `addBlocks`: task IDs that cannot start until this task completes.
+- `addBlockedBy`: task IDs that must complete before this task can start.
 
-Environment variables:
-
-| Variable | Value | Behavior |
-| --- | --- | --- |
-| `PI_TASKS` | `off` | Use in-memory storage only. |
-| `PI_TASKS` | `name` | Use a named shared task list under the Pi tasks directory. |
-| `PI_TASKS` | path | Use an explicit absolute or relative task file path. |
-| `PI_TASKS_DEBUG` | `1` | Print task RPC and spawn debug output to stderr. |
+Deleting a task or clearing completed tasks also removes dependency edges that point to deleted tasks.
 
 ## Development
 
