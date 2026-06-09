@@ -1,0 +1,24 @@
+{
+  "name": "pi-tasks",
+  "private": true,
+  "description": "Pi extension for task tracking and coordination",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "tasks",
+    "todo",
+    "coordination"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}

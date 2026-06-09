@@ -3,6 +3,7 @@ packages:
   - pi-git-commit
   - pi-input-3000
   - pi-subagents
+  - pi-tasks
   - pi-usage-heatmap
 allowBuilds:
   "@google/genai": true
