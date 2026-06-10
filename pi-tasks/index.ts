@@ -16,6 +16,13 @@ function openBlockers(store: TaskStore, blockedBy: string[]): string[] {
 
 const AUTO_CLEAR_COMPLETED_LIST_DELAY_TURNS = 5;
 
+const TASK_SYSTEM_PROMPT_APPEND = `
+
+## Task tracking
+
+Use TaskCreate for non-trivial multi-step work. Use TaskUpdate to mark tasks in_progress before starting and completed when done. Use TaskList and TaskGet to inspect current task state. Use addBlocks/addBlockedBy when task order matters. Skip task tools for trivial single-step requests.
+`;
+
 export default function (pi: ExtensionAPI) {
   const store = new TaskStore();
   const widget = new TaskWidget(store);
@@ -60,7 +67,10 @@ export default function (pi: ExtensionAPI) {
     widget.update();
   };
 
-  pi.on("before_agent_start", async (_event, ctx) => bindUI(ctx));
+  pi.on("before_agent_start", async (event, ctx) => {
+    bindUI(ctx);
+    return { systemPrompt: event.systemPrompt + TASK_SYSTEM_PROMPT_APPEND };
+  });
   pi.on("turn_start", async (_event, ctx) => {
     currentTurn++;
     clearCompletedListIfDue();
@@ -85,10 +95,11 @@ Fields:
 - subject: brief imperative title
 - description: detailed context and acceptance criteria
 - activeForm: optional present-continuous text shown in the widget while in progress`,
+    promptSnippet: "Create an in-memory task for non-trivial multi-step work",
     promptGuidelines: [
-      "Use TaskCreate for non-trivial multi-step work.",
-      "Mark tasks as in_progress before starting and completed when finished.",
-      "Use dependencies when one task must wait for another.",
+      "Use TaskCreate for non-trivial multi-step work that benefits from visible progress tracking.",
+      "Do not use TaskCreate for trivial single-step requests.",
+      "After TaskCreate, use TaskUpdate to set dependencies when task order matters.",
     ],
     parameters: Type.Object({
       subject: Type.String({ description: "A brief title for the task" }),
@@ -109,6 +120,10 @@ Fields:
     description: `List all tasks with status and open blockers.
 
 Tasks are grouped pending first, then in_progress, then completed. Pending tasks that have incomplete dependencies are shown as blocked.`,
+    promptSnippet: "List current in-memory tasks, statuses, and open blockers",
+    promptGuidelines: [
+      "Use TaskList to inspect current task status before choosing what to work on next.",
+    ],
     parameters: Type.Object({}),
 
     execute() {
@@ -139,6 +154,10 @@ Tasks are grouped pending first, then in_progress, then completed. Pending tasks
     name: "TaskGet",
     label: "TaskGet",
     description: "Get full details for a task, including dependency edges.",
+    promptSnippet: "Get full details for one task and its dependency edges",
+    promptGuidelines: [
+      "Use TaskGet when you need a task's full description or dependency edges before updating it.",
+    ],
     parameters: Type.Object({
       taskId: Type.String({ description: "The ID of the task to retrieve" }),
     }),
@@ -181,10 +200,11 @@ Status workflow:
 Dependency fields are bidirectional:
 - addBlocks: task IDs that cannot start until this task completes
 - addBlockedBy: task IDs that must complete before this task can start`,
+    promptSnippet: "Update task status, text, active form, or dependency edges",
     promptGuidelines: [
-      "Set status to in_progress before starting work on a task.",
-      "Set status to completed only when the task is fully done.",
-      "Use addBlocks/addBlockedBy when one task depends on another.",
+      "Use TaskUpdate to set status to in_progress before starting work on a task.",
+      "Use TaskUpdate to set status to completed only when the task is fully done.",
+      "Use TaskUpdate addBlocks/addBlockedBy when one task depends on another.",
     ],
     parameters: Type.Object({
       taskId: Type.String({ description: "The ID of the task to update" }),

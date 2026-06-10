@@ -8,6 +8,7 @@ In-memory Pi task tracker for the current session.
 - Task statuses: `pending`, `in_progress`, and `completed`.
 - Dependency tracking with `blocks` and `blockedBy` relationships.
 - Live task widget above the editor.
+- System prompt guidance for using task tools on non-trivial multi-step work.
 - Completed lists auto-clear after 5 turns.
 - Interactive `/tasks` menu for viewing, creating, completing, deleting, and clearing tasks.
 
