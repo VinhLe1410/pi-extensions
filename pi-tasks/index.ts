@@ -14,6 +14,17 @@ function openBlockers(store: TaskStore, blockedBy: string[]): string[] {
   });
 }
 
+function formatTaskState(store: TaskStore): string {
+  const lines = store.list().map(task => {
+    const blockers = openBlockers(store, task.blockedBy);
+    const blockedText = blockers.length > 0
+      ? ` ← blocked by ${blockers.map(id => "#" + id).join(", ")}`
+      : "";
+    return `#${task.id} ${task.status}${blockedText}`;
+  });
+  return lines.length > 0 ? `Tasks:\n${lines.join("\n")}` : "Tasks: none";
+}
+
 const AUTO_CLEAR_COMPLETED_LIST_DELAY_TURNS = 5;
 
 const TASK_SYSTEM_PROMPT_APPEND = `
@@ -244,7 +255,7 @@ Dependency fields are bidirectional:
       if (warnings.length > 0) {
         msg += ` (warning: ${warnings.join("; ")})`;
       }
-      return Promise.resolve(textResult(msg));
+      return Promise.resolve(textResult(`${msg}\n\n${formatTaskState(store)}`));
     },
   });
 
