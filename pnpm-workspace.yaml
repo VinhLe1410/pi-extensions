@@ -1,4 +1,5 @@
 packages:
+  - pi-flow-style
   - pi-git-commit
   - pi-input-3000
   - pi-usage-heatmap

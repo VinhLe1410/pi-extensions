@@ -1,15 +1,14 @@
 {
   "name": "pi-extensions",
   "private": true,
-  "packageManager": "pnpm@11.1.1",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests --exclude \"pi-subagents/test/**\""
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "^0.78.0",
-    "@earendil-works/pi-coding-agent": "^0.78.0",
-    "@earendil-works/pi-tui": "^0.78.0",
+    "@earendil-works/pi-ai": "^0.80.2",
+    "@earendil-works/pi-coding-agent": "^0.80.2",
+    "@earendil-works/pi-tui": "^0.80.2",
     "@types/node": "25.7.0",
     "typebox": "^1.1.33",
     "typescript": "^5.0.0",
