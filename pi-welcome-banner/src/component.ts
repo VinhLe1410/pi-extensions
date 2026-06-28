@@ -1,13 +1,19 @@
 import { type Theme, type ThemeColor } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth, type Component, type TUI } from "@earendil-works/pi-tui";
-import { FIELD_HEIGHT, FIELD_WIDTH, MIN_BANNER_WIDTH, TARGETS, type PiToken } from "./glyph.ts";
+import { CENTER_X, CENTER_Y, FIELD_HEIGHT, FIELD_WIDTH, MIN_BANNER_WIDTH, TARGETS, type PiToken } from "./glyph.ts";
 import {
+  AMBIENT_FRAME_MS,
+  ASSEMBLE_FRAME_MS,
   ASSEMBLE_FRAMES,
-  FRAME_MS,
   createParticles,
-  getParticlePosition,
+  DISPERSE_FRAME_MS,
+  DISPERSAL_FRAMES,
+  getAssemblePosition,
+  getDispersePosition,
   getParticleProgress,
   type Particle,
+  type Phase,
+  scalePoint,
 } from "./particles.ts";
 
 const CELL_WIDTH = 2;
@@ -16,10 +22,6 @@ const MIN_TOP_PADDING = 2;
 
 export { MIN_BANNER_WIDTH } from "./glyph.ts";
 
-type BannerOptions = {
-  expanded: boolean;
-};
-
 type StyledGlyph = {
   text: string;
   color: ThemeColor;
@@ -27,117 +29,131 @@ type StyledGlyph = {
   rank: number;
 };
 
+type ScaledBounds = {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+};
+
+type RenderMetrics = {
+  scale: number;
+  bounds: ScaledBounds;
+  fieldWidth: number;
+  topPadding: number;
+};
+
+/**
+ * Normal header banner. It deliberately avoids TUI overlays because visible
+ * overlays disable pi-input-3000's sticky input compositor.
+ */
 export class WelcomeBannerComponent implements Component {
-  private expanded: boolean;
   private frame = 0;
+  private visible = true;
+  private dispersing = false;
+  private disperseFrame = 0;
   private timer?: ReturnType<typeof setInterval>;
-  private cachedWidth = -1;
-  private cachedRows = -1;
-  private cachedFrame = -1;
-  private cachedExpanded = false;
-  private cachedLines: string[] = [];
+  private intervalMs = 0;
   private readonly particles = createParticles(TARGETS);
+  private collapseResolvers: Array<() => void> = [];
 
   constructor(
     private readonly tui: TUI,
     private readonly theme: Theme,
-    options: BannerOptions,
   ) {
-    this.expanded = options.expanded;
-    if (this.expanded) this.startTimer();
+    this.startTimer();
   }
 
   replay(): void {
-    if (this.tui.terminal.columns < MIN_BANNER_WIDTH) return;
-
-    this.expanded = true;
+    this.visible = true;
+    this.dispersing = false;
+    this.disperseFrame = 0;
     this.frame = 0;
-    this.stopTimer();
     this.startTimer();
     this.bump();
   }
 
-  collapse(): void {
-    if (!this.expanded) return;
+  collapse(): Promise<void> {
+    if (!this.visible) return Promise.resolve();
+    if (this.dispersing) return this.waitForCollapse();
 
-    this.expanded = false;
-    this.stopTimer();
+    if (this.frame < ASSEMBLE_FRAMES) {
+      this.hideNow();
+      return Promise.resolve();
+    }
+
+    const done = this.waitForCollapse();
+    this.dispersing = true;
+    this.disperseFrame = 0;
+    this.startTimer();
     this.bump();
+    return done;
   }
 
   dispose(): void {
     this.stopTimer();
+    this.resolveCollapseWaiters();
   }
 
   invalidate(): void {
-    this.cachedWidth = -1;
-    this.cachedRows = -1;
-    this.cachedFrame = -1;
+    // Frame-driven component; no render cache to invalidate.
   }
 
   render(width: number): string[] {
-    const rows = this.tui.terminal.rows;
-    if (
-      this.cachedWidth === width &&
-      this.cachedRows === rows &&
-      this.cachedFrame === this.frame &&
-      this.cachedExpanded === this.expanded
-    ) {
-      return this.cachedLines;
+    if (!this.visible || width < MIN_BANNER_WIDTH) return [];
+
+    const metrics = this.getRenderMetrics(width);
+    const cells = this.buildCells(metrics.scale);
+    const lines = Array<string>(metrics.topPadding).fill("");
+
+    for (let sy = metrics.bounds.minY; sy <= metrics.bounds.maxY; sy++) {
+      let line = "";
+      for (let sx = metrics.bounds.minX; sx <= metrics.bounds.maxX; sx++) {
+        const cell = cells.get(pointKey(sx, sy));
+        line += cell ? `${this.styled(cell)} ` : "  ";
+      }
+      lines.push(centerLine(line, width, metrics.fieldWidth));
     }
 
-    const lines = this.expanded && width >= MIN_BANNER_WIDTH ? this.renderExpanded(width, rows) : [];
-
-    this.cachedLines = lines.map((line) => fit(line, width));
-    this.cachedWidth = width;
-    this.cachedRows = rows;
-    this.cachedFrame = this.frame;
-    this.cachedExpanded = this.expanded;
-    return this.cachedLines;
+    return lines;
   }
 
-  private renderExpanded(width: number, rows: number): string[] {
-    const field = this.renderParticleField(width, rows);
+  private getRenderMetrics(width: number): RenderMetrics {
+    const scale = getFieldScale(width, this.tui.terminal.rows);
+    const bounds = getScaledBounds(scale);
+    const fieldWidth = (bounds.maxX - bounds.minX + 1) * CELL_WIDTH;
+    const fieldHeight = bounds.maxY - bounds.minY + 1;
     const topPadding = Math.max(
       MIN_TOP_PADDING,
-      Math.floor((rows - RESERVED_ROWS - field.length) / 2),
+      Math.floor((this.tui.terminal.rows - RESERVED_ROWS - fieldHeight) / 2),
     );
 
-    return [
-      ...Array.from({ length: topPadding }, () => ""),
-      ...field,
-      "",
-    ];
-  }
-
-  private renderParticleField(width: number, rows: number): string[] {
-    const scale = getFieldScale(width, rows);
-    const cells = this.buildCells(scale);
-    const fieldWidth = getScaledFieldWidth(scale, width);
-    const fieldHeight = Math.max(1, Math.ceil(FIELD_HEIGHT * scale));
-    const left = Math.floor((FIELD_WIDTH - fieldWidth) / 2);
-    const top = Math.floor((FIELD_HEIGHT - fieldHeight) / 2);
-
-    return Array.from({ length: fieldHeight }, (_, rowIndex) => {
-      const y = rowIndex + top;
-      const line = Array.from({ length: fieldWidth }, (_, columnIndex) => {
-        const x = columnIndex + left;
-        const cell = cells.get(pointKey(x, y));
-        return cell ? `${this.styled(cell)} ` : "  ";
-      }).join("");
-
-      return centerLine(line, width);
-    });
+    return { scale, bounds, fieldWidth, topPadding };
   }
 
   private buildCells(scale: number): Map<string, StyledGlyph> {
     const cells = new Map<string, StyledGlyph>();
+    const phase = this.currentPhase();
+
+    if (phase === "disperse") {
+      const progress = clamp(this.disperseFrame / DISPERSAL_FRAMES, 0, 1);
+      for (const particle of this.particles) {
+        const glyph = this.disperseGlyph(progress, particle);
+        if (!glyph) continue;
+
+        const pos = getDispersePosition(particle, progress, scale);
+        this.setCell(cells, pos.x, pos.y, glyph);
+      }
+      return cells;
+    }
 
     for (const particle of this.particles) {
       const progress = getParticleProgress(this.frame, particle);
-      const { x, y } = getParticlePosition(particle, progress, scale);
-      this.setCell(cells, x, y, this.particleGlyph(progress, particle));
+      const pos = getAssemblePosition(particle, progress, scale);
+      this.setCell(cells, pos.x, pos.y, this.particleGlyph(progress, particle));
     }
+
+    if (phase === "idle") this.applyIdle(cells, scale);
 
     return cells;
   }
@@ -145,17 +161,69 @@ export class WelcomeBannerComponent implements Component {
   private particleGlyph(progress: number, particle: Particle): StyledGlyph {
     if (progress >= 0.94) return finalGlyph(particle.token);
 
+    if (progress > 0.12 && progress < 0.82 && this.twinkles(particle)) {
+      return { text: "*", color: "accent", bold: true, rank: 25 };
+    }
+
     if (progress >= 0.68) {
-      return particle.token === "#"
+      return particle.token === "#" || particle.token === "m"
         ? { text: "●", color: "accent", bold: true, rank: 30 }
         : { text: "•", color: "accent", bold: true, rank: 28 };
     }
 
-    if (progress >= 0.28) {
-      return { text: "•", color: "muted", rank: 20 };
-    }
+    if (progress >= 0.28) return { text: "•", color: "muted", rank: 20 };
 
     return { text: "·", color: "dim", rank: 10 };
+  }
+
+  private disperseGlyph(progress: number, particle: Particle): StyledGlyph | null {
+    const fadeProgress = clamp(progress * 1.2 - (1 - particle.radialFactor) * 0.5, 0, 1);
+    const terminalFade = progress > 0.85 ? 1 - (progress - 0.85) / 0.15 : 1;
+    const fade = (1 - fadeProgress) * terminalFade;
+
+    if (fade <= 0.08) return null;
+    if (fade > 0.7) {
+      return particle.token === "#" || particle.token === "m"
+        ? { text: "●", color: "accent", bold: true, rank: 38 }
+        : { text: "•", color: "accent", bold: true, rank: 34 };
+    }
+    if (fade > 0.4) return { text: "•", color: "muted", rank: 22 };
+    return { text: "·", color: "dim", rank: 12 };
+  }
+
+  private applyIdle(cells: Map<string, StyledGlyph>, scale: number): void {
+    const t = this.frame - ASSEMBLE_FRAMES;
+
+    for (const particle of this.particles) {
+      const pos = scalePoint(particle.targetX, particle.targetY, scale);
+      const wave = Math.sin(t * 0.22 - (particle.targetX * 0.7 + particle.targetY * 1.1));
+      const base = finalGlyph(particle.token);
+
+      if (wave > 0.55) {
+        const sparkle =
+          particle.token === "#" && Math.floor(particle.targetX * 3 + particle.targetY * 5 + t) % 6 === 0;
+        this.setCell(cells, pos.x, pos.y, {
+          text: sparkle ? "*" : base.text,
+          color: "accent",
+          bold: true,
+          rank: 46,
+        });
+      } else if (wave > -0.2) {
+        this.setCell(cells, pos.x, pos.y, base);
+      } else {
+        this.setCell(cells, pos.x, pos.y, { ...base, bold: false, rank: base.rank - 4 });
+      }
+    }
+  }
+
+  private twinkles(particle: Particle): boolean {
+    return (this.frame + particle.twinklePhase) % 12 < 2;
+  }
+
+  private currentPhase(): Phase {
+    if (this.dispersing) return "disperse";
+    if (this.frame < ASSEMBLE_FRAMES) return "assemble";
+    return "idle";
   }
 
   private setCell(cells: Map<string, StyledGlyph>, x: number, y: number, glyph: StyledGlyph): void {
@@ -171,17 +239,44 @@ export class WelcomeBannerComponent implements Component {
     return glyph.bold ? this.theme.bold(text) : text;
   }
 
-  private startTimer(): void {
-    if (this.timer) return;
+  private hideNow(): void {
+    this.visible = false;
+    this.dispersing = false;
+    this.stopTimer();
+    this.resolveCollapseWaiters();
+    this.bump();
+  }
 
-    this.timer = setInterval(() => {
-      this.frame += 1;
-      if (this.frame >= ASSEMBLE_FRAMES) {
-        this.frame = ASSEMBLE_FRAMES;
-        this.stopTimer();
+  private waitForCollapse(): Promise<void> {
+    return new Promise((resolve) => this.collapseResolvers.push(resolve));
+  }
+
+  private startTimer(): void {
+    this.stopTimer();
+    this.intervalMs = this.frameIntervalMs(this.currentPhase());
+    this.timer = setInterval(() => this.tick(), this.intervalMs);
+  }
+
+  private frameIntervalMs(phase: Phase): number {
+    if (phase === "disperse") return DISPERSE_FRAME_MS;
+    if (phase === "idle") return AMBIENT_FRAME_MS;
+    return ASSEMBLE_FRAME_MS;
+  }
+
+  private tick(): void {
+    if (this.dispersing) {
+      this.disperseFrame += 1;
+      if (this.disperseFrame >= DISPERSAL_FRAMES) {
+        this.hideNow();
+        return;
       }
-      this.bump();
-    }, FRAME_MS);
+    } else {
+      this.frame += 1;
+      const desired = this.frameIntervalMs(this.currentPhase());
+      if (desired !== this.intervalMs) this.startTimer();
+    }
+
+    this.bump();
   }
 
   private stopTimer(): void {
@@ -189,10 +284,16 @@ export class WelcomeBannerComponent implements Component {
 
     clearInterval(this.timer);
     this.timer = undefined;
+    this.intervalMs = 0;
+  }
+
+  private resolveCollapseWaiters(): void {
+    const resolvers = this.collapseResolvers;
+    this.collapseResolvers = [];
+    for (const resolve of resolvers) resolve();
   }
 
   private bump(): void {
-    this.invalidate();
     this.tui.requestRender();
   }
 }
@@ -200,7 +301,7 @@ export class WelcomeBannerComponent implements Component {
 function finalGlyph(token: PiToken): StyledGlyph {
   if (token === "#") return { text: "●", color: "accent", bold: true, rank: 40 };
   if (token === "m") return { text: "•", color: "accent", bold: true, rank: 36 };
-  return { text: "·", color: "accent", rank: 32 };
+  return { text: "·", color: "accent", bold: false, rank: 32 };
 }
 
 function getFieldScale(width: number, rows: number): number {
@@ -212,21 +313,26 @@ function getFieldScale(width: number, rows: number): number {
   return Math.min(1, widthScale, heightScale);
 }
 
-function getScaledFieldWidth(scale: number, width: number): number {
-  return Math.max(1, Math.min(Math.floor(width / CELL_WIDTH), Math.ceil(FIELD_WIDTH * scale)));
+function getScaledBounds(scale: number): ScaledBounds {
+  return {
+    minX: Math.round(CENTER_X + (0 - CENTER_X) * scale),
+    maxX: Math.round(CENTER_X + (FIELD_WIDTH - 1 - CENTER_X) * scale),
+    minY: Math.round(CENTER_Y + (0 - CENTER_Y) * scale),
+    maxY: Math.round(CENTER_Y + (FIELD_HEIGHT - 1 - CENTER_Y) * scale),
+  };
+}
+
+function centerLine(line: string, width: number, lineWidth = visibleWidth(line)): string {
+  if (lineWidth >= width) return truncateToWidth(line, width);
+
+  const left = Math.floor((width - lineWidth) / 2);
+  return `${" ".repeat(left)}${line}`;
 }
 
 function pointKey(x: number, y: number): string {
   return `${x},${y}`;
 }
 
-function fit(line: string, width: number): string {
-  if (width <= 0) return "";
-  return truncateToWidth(line, width, "");
-}
-
-function centerLine(line: string, width: number): string {
-  const fitted = fit(line, width);
-  const padding = Math.max(0, Math.floor((width - visibleWidth(fitted)) / 2));
-  return `${" ".repeat(padding)}${fitted}`;
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }

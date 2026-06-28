@@ -23,18 +23,19 @@ export default function (pi: ExtensionAPI) {
     if (!shouldRenderForSession(event.reason, ctx.sessionManager.getEntries())) return;
 
     ctx.ui.setHeader((tui, theme) => {
+      disposeBanner();
       if (tui.terminal.columns < MIN_BANNER_WIDTH) return EMPTY_HEADER;
 
-      disposeBanner();
-      banner = new WelcomeBannerComponent(tui, theme, {
-        expanded: true,
-      });
+      banner = new WelcomeBannerComponent(tui, theme);
       return banner;
     });
   });
 
-  pi.on("agent_start", async () => {
-    banner?.collapse();
+  // Run before Pi emits the user/assistant message rows. This lets the normal
+  // header finish its self-contained exit first, so chat appears at its final
+  // layout position without involving a TUI overlay (which breaks pi-input-3000).
+  pi.on("before_agent_start", async () => {
+    await banner?.collapse();
   });
 
   pi.on("session_shutdown", async () => {
