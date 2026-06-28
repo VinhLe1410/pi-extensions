@@ -1,6 +1,7 @@
 packages:
   - pi-git-commit
   - pi-usage-heatmap
+  - pi-welcome-banner
 allowBuilds:
   "@google/genai": true
   koffi: true

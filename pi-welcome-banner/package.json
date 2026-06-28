@@ -1,0 +1,15 @@
+{
+  "name": "pi-welcome-banner",
+  "private": true,
+  "description": "Quiet startup welcome banner for Pi",
+  "type": "module",
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
